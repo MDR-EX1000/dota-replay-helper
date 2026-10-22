@@ -25,8 +25,7 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 
 ```
 replay/
-├── cli.py                     # 统一 CLI（stats/web/deploy/roll/parse）
-├── stats.py / balance.py / roll.py / make_web.py
+├── stats.py / balance.py / roll.py / make_web.py / deploy.py
 ├── aliases.json               # 多账号合并（仅名字，不含 SteamID）
 ├── baselines.json             # 核心/酱油表现分基准
 ├── docs/index.html            # 公开网页（GitHub Pages 源）
@@ -35,20 +34,22 @@ replay/
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
 ├── player_stats.csv / .html   # 本地汇总表（git 忽略）
 ├── manta/                     # 上游解析库（git 忽略）
-└── 一键统计.bat / 一键打开网页.bat / 一键发布到GitHub.bat
+└── 三个一键 bat
 ```
 
 | 路径 | 说明 |
 |---|---|
-| `cli.py` | 统一入口：`stats` / `ratings` / `web` / `publish` / `deploy` / `roll` / `parse` |
 | `stats.py` | 汇总玩家数据（胜率、KDA、GPM/XPM、伤害/经济等） |
 | `balance.py` | 计算 Elo + 表现分，枚举并排序 5v5 分法 |
 | `roll.py` | 规则化 roll（R1–R5），只在合格方案里随机 |
 | `make_web.py` | 生成三 Tab 网页到 `docs/index.html` |
+| `deploy.py` | 生成 → 提交 → 推送 → 更新 GitHub Pages |
 | `aliases.json` | 同一玩家多账号合并配置 |
 | `baselines.json` | 核心 / 酱油的表现分基准值，可分别调整 |
 | `mantatool/parse.go` | 重放解析器（Go + manta），输出 JSON |
-| `一键发布到GitHub.bat` | 一键生成网页并发布到 GitHub Pages |
+| `一键统计.bat` | 重新生成汇总表 |
+| `一键打开网页.bat` | 重新生成并打开网页 |
+| `一键发布到GitHub.bat` | 生成网页并发布到 GitHub Pages |
 
 ## 一键发布
 
@@ -78,16 +79,13 @@ git remote add origin git@github.com:用户名/仓库.git
 https://用户名.github.io/仓库名/
 ```
 
-## 常用命令（可选）
+## 手动运行（调试用）
 
 ```bash
-python cli.py stats          # 汇总统计
-python cli.py ratings        # 查看评分
-python cli.py web            # 生成并打开网页
-python cli.py publish        # 生成并起局域网服务器（只服务 docs/）
-python cli.py deploy         # 生成 + 提交 + 推送 + Pages
-python cli.py roll "A" ... "J"
-python cli.py parse path\to\x.dem
+python stats.py          # 汇总统计
+python make_web.py       # 生成 docs/index.html
+python deploy.py         # 发布到 GitHub Pages
+python roll.py "A" ... "J"
 ```
 
 ## 评分口径
