@@ -8,8 +8,15 @@ __pycache__/
 # 上游库（按需 git clone，不纳入本仓库）
 manta/
 
-# 解析出的原始实体转储（体积大，不进 git）
-json/*_raw.json
+# 解析结果（含 SteamID，只保留在本地，不公开）
+json/
+
+# 本地生成的表格（含 SteamID）
+player_stats.csv
+player_stats.html
+
+# 根目录旧的生成网页（正式页面在 docs/）
+/index.html
 
 # 探针脚本产生的临时实体转储
 mantatool/*.json

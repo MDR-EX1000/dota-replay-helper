@@ -19,6 +19,7 @@ import balance
 import stats
 
 REPLAY_ROOT = os.path.dirname(os.path.abspath(__file__))
+DOCS_DIR = os.path.join(REPLAY_ROOT, "docs")
 
 
 def collect_players():
@@ -208,7 +209,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       <tr><td>伤害/经济</td><td>30%</td><td>1.59 / 1.40</td></tr>
     </table>
     <p><code>原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]</code><br>
-       再按场次收缩：<code>1000 + (原始表现−1000) × n/(n+4)</code>。</p>
+       再按场次收缩：<code>1000 + (原始表现−1000) × n/(n+5)</code>。</p>
   </div>
 
   <div class="rules-box">
@@ -467,8 +468,8 @@ def main():
             .replace("__DATA__", json.dumps(players, ensure_ascii=False))
             .replace("__MATCHES__", str(match_count))
             .replace("__TIME__", datetime.now().strftime("%Y-%m-%d %H:%M")))
-    os.makedirs(REPLAY_ROOT, exist_ok=True)
-    out = os.path.join(REPLAY_ROOT, "index.html")
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    out = os.path.join(DOCS_DIR, "index.html")
     with open(out, "w", encoding="utf-8") as fp:
         fp.write(html)
     print(f"已生成: {out}")
