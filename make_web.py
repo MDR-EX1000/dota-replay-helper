@@ -207,7 +207,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       <tr><td>XPM</td><td>15%</td><td>720 / 490</td></tr>
       <tr><td>伤害/经济</td><td>35%</td><td>1.59 / 1.40</td></tr>
     </table>
-    <p><code>原始表现 = 1000 + 300 × Σ[权重 × (实际值/基准值 − 1)]</code><br>
+    <p><code>原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]</code><br>
        再按场次收缩：<code>1000 + (原始表现−1000) × n/(n+5)</code>。</p>
   </div>
 
