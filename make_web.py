@@ -196,16 +196,16 @@ TEMPLATE = r"""<!DOCTYPE html>
 <section id="pane-rules" class="pane">
   <div class="rules-box">
     <h3 style="margin-top:0">一、评分口径</h3>
-    <p><code>综合分 = 0.5 × Elo + 0.5 × 表现分</code></p>
+    <p><code>综合分 = 0.6 × Elo + 0.4 × 表现分</code></p>
     <p style="color:#8a90a0">Elo 本身已经包含胜负信息，所以不再单独加胜率分，避免重复计算；胜率只在数据表中展示。</p>
     <p><b>Elo</b>：初始 1000，K=32。每场按队伍平均分计算期望胜率，再给 5 人同步加减。</p>
     <p><b>表现分</b>：绝对数值 + 位置基准（不做百分位排名），权重统一：</p>
     <table>
       <tr><th>指标</th><th>权重</th><th>基准（核心 / 酱油）</th></tr>
-      <tr><td>KDA</td><td>35%</td><td>3.7 / 2.4</td></tr>
+      <tr><td>KDA</td><td>40%</td><td>3.7 / 2.4</td></tr>
       <tr><td>GPM</td><td>15%</td><td>540 / 335</td></tr>
       <tr><td>XPM</td><td>15%</td><td>720 / 490</td></tr>
-      <tr><td>伤害/经济</td><td>35%</td><td>1.59 / 1.40</td></tr>
+      <tr><td>伤害/经济</td><td>30%</td><td>1.59 / 1.40</td></tr>
     </table>
     <p><code>原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]</code><br>
        再按场次收缩：<code>1000 + (原始表现−1000) × n/(n+5)</code>。</p>

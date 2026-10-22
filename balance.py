@@ -11,13 +11,13 @@
     Elo        : 初始 1000，K=32，按比赛时间顺序逐场更新
     表现分     : 绝对数值 + 位置基准，不做百分位排名。
                  核心/酱油统一权重：
-                   KDA 35% / GPM 15% / XPM 15% / 伤害-经济比 35%
+                   KDA 40% / GPM 15% / XPM 15% / 伤害-经济比 30%
                  位置基准：
                    核心 KDA 3.7 / GPM 540 / XPM 720 / 伤害经济比 1.59
                    酱油 KDA 2.4 / GPM 335 / XPM 490 / 伤害经济比 1.40
                  原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]
                  场次收缩：1000 + (原始表现−1000) × n/(n+5)
-    综合分     : 0.5 × Elo + 0.5 × 表现分
+    综合分     : 0.6 × Elo + 0.4 × 表现分
                  （Elo 已包含胜负信息，胜率只展示，不重复计分）
 
 分队:
@@ -41,6 +41,33 @@ MATCHES_DIR = os.path.join(os.path.expanduser("~"), "Desktop", "replay", "json")
 K_FACTOR = 32
 BASE = 1000.0
 START_ELO = BASE
+
+
+DEFAULT_BASELINES = {
+    "核心": {"kda": 3.7, "gpm": 540.0, "xpm": 720.0, "dmg_gold": 1.59},
+    "酱油": {"kda": 2.4, "gpm": 335.0, "xpm": 490.0, "dmg_gold": 1.40},
+}
+
+
+def load_baselines():
+    """读取 baselines.json；缺失或格式错误时使用默认值。"""
+    path = os.path.join(SCRIPT_DIR, "baselines.json")
+    if not os.path.isfile(path):
+        return DEFAULT_BASELINES
+    try:
+        with open(path, encoding="utf-8") as fp:
+            data = json.load(fp)
+        result = {}
+        for role, default in DEFAULT_BASELINES.items():
+            row = data.get(role, {})
+            result[role] = {}
+            for key, dv in default.items():
+                v = row.get(key, dv)
+                result[role][key] = float(v) if float(v) > 0 else dv
+        return result
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        print(f"[警告] baselines.json 读取失败，使用默认基准: {exc}")
+        return DEFAULT_BASELINES
 
 
 def load_aliases():
@@ -144,27 +171,18 @@ def build_ratings(matches):
         r["avg_lh"] = sum(r["lh"]) / r["games"]
         r["avg_dmg_gold"] = sum(r["dmg_ratio"]) / r["games"]
 
-    # 绝对值 + 位置基准，不做百分位；四项权重固定
-    # 每项: (取值函数, 基准值, 权重)
-    MODELS = {
-        "核心": [
-            (lambda r: r["avg_kda"], 3.7, 0.35),        # 战斗
-            (lambda r: r["avg_gpm"], 540.0, 0.15),       # 经济
-            (lambda r: r["avg_xpm"], 720.0, 0.15),       # 等级
-            (lambda r: r["avg_dmg_gold"], 1.59, 0.35),   # 伤害/经济
-        ],
-        "酱油": [
-            (lambda r: r["avg_kda"], 2.4, 0.35),
-            (lambda r: r["avg_gpm"], 335.0, 0.15),
-            (lambda r: r["avg_xpm"], 490.0, 0.15),
-            (lambda r: r["avg_dmg_gold"], 1.40, 0.35),
-        ],
-    }
+    # 绝对值 + 位置基准，不做百分位；权重固定，基准可按位置配置
+    weights = {"kda": 0.40, "gpm": 0.15, "xpm": 0.15, "dmg_gold": 0.30}
+    baselines = load_baselines()
     perf = {}
     for k, r in agg.items():
-        score = 0.0
-        for getter, base, weight in MODELS[r["role"]]:
-            score += weight * (getter(r) / base - 1.0)
+        b = baselines[r["role"]]
+        score = (
+            weights["kda"] * (r["avg_kda"] / b["kda"] - 1.0)
+            + weights["gpm"] * (r["avg_gpm"] / b["gpm"] - 1.0)
+            + weights["xpm"] * (r["avg_xpm"] / b["xpm"] - 1.0)
+            + weights["dmg_gold"] * (r["avg_dmg_gold"] / b["dmg_gold"] - 1.0)
+        )
         raw = BASE + 500.0 * score
         n = r["games"]
         shrink = n / (n + 5.0)
@@ -172,7 +190,7 @@ def build_ratings(matches):
 
     players = {}
     for k, r in agg.items():
-        rating = 0.5 * elo[k] + 0.5 * perf[k]
+        rating = 0.6 * elo[k] + 0.4 * perf[k]
         provisional = r["games"] < 2
         if provisional:
             rating = BASE
