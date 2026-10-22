@@ -25,16 +25,18 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 
 ```
 replay/
-├── stats.py / balance.py / roll.py / make_web.py / deploy.py
+├── stats.py / balance.py / roll.py / make_web.py
+├── deploy.py / deploy_tcb.py  # GitHub / 腾讯云发布
+├── cloudbase.json             # 腾讯云环境 ID 与访问域名
 ├── aliases.json               # 多账号合并（仅名字，不含 SteamID）
 ├── baselines.json             # 核心/酱油表现分基准
-├── docs/index.html            # 公开网页（GitHub Pages 源）
+├── docs/index.html            # 公开网页
 ├── mantatool/                 # Go 解析器源码与 parse.exe
 ├── dem/                       # .dem 重放（git 忽略）
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
 ├── player_stats.csv / .html   # 本地汇总表（git 忽略）
 ├── manta/                     # 上游解析库（git 忽略）
-└── 三个一键 bat
+└── 四个一键 bat
 ```
 
 | 路径 | 说明 |
@@ -44,12 +46,15 @@ replay/
 | `roll.py` | 规则化 roll（R1–R5），只在合格方案里随机 |
 | `make_web.py` | 生成三 Tab 网页到 `docs/index.html` |
 | `deploy.py` | 生成 → 提交 → 推送 → 更新 GitHub Pages |
+| `deploy_tcb.py` | 生成 → 上传到腾讯云 CloudBase 静态托管 |
+| `cloudbase.json` | 腾讯云环境 ID 与默认访问域名 |
 | `aliases.json` | 同一玩家多账号合并配置 |
 | `baselines.json` | 核心 / 酱油的表现分基准值，可分别调整 |
 | `mantatool/parse.go` | 重放解析器（Go + manta），输出 JSON |
 | `一键统计.bat` | 重新生成汇总表 |
 | `一键打开网页.bat` | 重新生成并打开网页 |
 | `一键发布到GitHub.bat` | 生成网页并发布到 GitHub Pages |
+| `一键发布到腾讯云.bat` | 生成网页并上传到腾讯云 CloudBase |
 
 ## 一键发布
 
@@ -78,6 +83,30 @@ git remote add origin git@github.com:用户名/仓库.git
 ```
 https://用户名.github.io/仓库名/
 ```
+
+## 一键发布到腾讯云
+
+双击：
+
+```
+一键发布到腾讯云.bat
+```
+
+它会重新生成网页，然后上传到 CloudBase 静态托管。
+
+前置条件（已配置好）：
+
+- `tcb login` 登录腾讯云
+- CloudBase 环境已开通静态网站托管
+- `cloudbase.json` 中的 `env_id` 对应环境
+
+当前访问地址：
+
+```
+https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/
+```
+
+默认域名不需要备案；绑定自己的域名需要 ICP 备案。
 
 ## 手动运行（调试用）
 
