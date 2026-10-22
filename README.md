@@ -16,7 +16,7 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
    └── make_web.py   → docs/index.html（公开网页）
                             │
                             ▼
-                     GitHub Pages
+                     腾讯云 CloudBase
 ```
 
 ## 目录
@@ -26,7 +26,7 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 ```
 replay/
 ├── stats.py / balance.py / roll.py / make_web.py
-├── deploy.py / deploy_tcb.py  # GitHub / 腾讯云发布
+├── deploy_tcb.py              # 腾讯云发布
 ├── cloudbase.json             # 腾讯云环境 ID 与访问域名
 ├── aliases.json               # 多账号合并（仅名字，不含 SteamID）
 ├── baselines.json             # 核心/酱油表现分基准
@@ -36,7 +36,7 @@ replay/
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
 ├── player_stats.csv / .html   # 本地汇总表（git 忽略）
 ├── manta/                     # 上游解析库（git 忽略）
-└── 四个一键 bat
+└── 三个一键 bat
 ```
 
 | 路径 | 说明 |
@@ -45,7 +45,6 @@ replay/
 | `balance.py` | 计算 Elo + 表现分，枚举并排序 5v5 分法 |
 | `roll.py` | 规则化 roll（R1–R5），只在合格方案里随机 |
 | `make_web.py` | 生成三 Tab 网页到 `docs/index.html` |
-| `deploy.py` | 生成 → 提交 → 推送 → 更新 GitHub Pages |
 | `deploy_tcb.py` | 生成 → 上传到腾讯云 CloudBase 静态托管 |
 | `cloudbase.json` | 腾讯云环境 ID 与默认访问域名 |
 | `aliases.json` | 同一玩家多账号合并配置 |
@@ -53,36 +52,7 @@ replay/
 | `mantatool/parse.go` | 重放解析器（Go + manta），输出 JSON |
 | `一键统计.bat` | 重新生成汇总表 |
 | `一键打开网页.bat` | 重新生成并打开网页 |
-| `一键发布到GitHub.bat` | 生成网页并发布到 GitHub Pages |
 | `一键发布到腾讯云.bat` | 生成网页并上传到腾讯云 CloudBase |
-
-## 一键发布
-
-双击：
-
-```
-一键发布到GitHub.bat
-```
-
-它会依次执行：
-
-1. 重新统计并生成 `docs/index.html`
-2. `git add/commit`
-3. `git push` 到 origin
-4. 通过 `gh` 启用或更新 GitHub Pages（`main` / `docs`）
-
-首次使用需要：
-
-```bash
-gh auth login -h github.com
-git remote add origin git@github.com:用户名/仓库.git
-```
-
-发布后地址：
-
-```
-https://用户名.github.io/仓库名/
-```
 
 ## 一键发布到腾讯云
 
@@ -94,9 +64,9 @@ https://用户名.github.io/仓库名/
 
 它会重新生成网页，然后上传到 CloudBase 静态托管。
 
-前置条件（已配置好）：
+前置条件：
 
-- `tcb login` 登录腾讯云
+- 已执行过 `tcb login`，或配置了 `cloudbase.secret.json` 自动登录
 - CloudBase 环境已开通静态网站托管
 - `cloudbase.json` 中的 `env_id` 对应环境
 
@@ -113,7 +83,7 @@ https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/
 ```bash
 python stats.py          # 汇总统计
 python make_web.py       # 生成 docs/index.html
-python deploy.py         # 发布到 GitHub Pages
+python deploy_tcb.py     # 发布到腾讯云
 python roll.py "A" ... "J"
 ```
 
@@ -135,9 +105,9 @@ python roll.py "A" ... "J"
 
 本仓库只跟踪代码、配置和公开网页。如需长期归档重放，建议单独备份到网盘/对象存储；确需纳入 git 时再改用 Git LFS（并准备支持 LFS 的远端）。
 
-## 公开仓库与隐私
+## 隐私与公开内容
 
-仓库公开，但以下内容**不会进入 git**：
+即使仓库公开，以下内容也**不会进入 git**：
 
 - `dem/`：比赛重放
 - `json/`：解析结果，含 SteamID

@@ -17,6 +17,36 @@ import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(ROOT, "cloudbase.json")
+SECRET = os.path.join(ROOT, "cloudbase.secret.json")
+
+
+def load_secret():
+    """优先读环境变量，其次读本地 cloudbase.secret.json（不提交）。"""
+    sid = os.environ.get("TENCENTCLOUD_SECRET_ID")
+    skey = os.environ.get("TENCENTCLOUD_SECRET_KEY")
+    token = os.environ.get("TENCENTCLOUD_TOKEN")
+    if sid and skey:
+        return sid, skey, token
+    if os.path.isfile(SECRET):
+        try:
+            with open(SECRET, encoding="utf-8") as fp:
+                data = json.load(fp)
+            return data.get("secret_id"), data.get("secret_key"), data.get("token")
+        except (OSError, json.JSONDecodeError):
+            pass
+    return None, None, None
+
+
+def ensure_login(tcb):
+    """有密钥时自动登录，避免每次手动 tcb login。"""
+    sid, skey, token = load_secret()
+    if not (sid and skey):
+        return True  # 没有密钥，沿用已有登录状态
+    cmd = [tcb, "login", "--apiKeyId", sid, "--apiKey", skey]
+    if token:
+        cmd += ["--token", token]
+    print("使用 API 密钥自动登录腾讯云…")
+    return subprocess.run(cmd, cwd=ROOT).returncode == 0
 
 
 def main():
@@ -37,6 +67,10 @@ def main():
     tcb = shutil.which("tcb")
     if not tcb:
         print("未找到 tcb 命令，请先安装：npm i -g @cloudbase/cli")
+        return 1
+
+    if not ensure_login(tcb):
+        print("自动登录失败，请检查 cloudbase.secret.json 或先手动 tcb login")
         return 1
 
     print("2/3 上传到腾讯云…")
