@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# 编译产物
+*.exe
+
+# 上游库（按需 git clone，不纳入本仓库）
+manta/
+
+# 旧数据副本（正式数据在 桌面/replay/json）
+matches/
+
+# 探针脚本产生的临时实体转储
+mantatool/*.json
+mantatool/classes.txt
+
+# 对黑 roll 不落盘
+roll_*.txt
+
+# 比赛重放（体积大，不进 git）
+*.dem
