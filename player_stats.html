@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>Dota 2 玩家统计</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px; background: #14161b; color: #e6e8ec;
+         font-family: "Microsoft YaHei", "Segoe UI", sans-serif; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  .sub { color: #8a90a0; font-size: 13px; margin-bottom: 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 10px 12px; text-align: right; white-space: nowrap;
+           border-bottom: 1px solid #242832; }
+  th { color: #8a90a0; font-weight: 500; position: sticky; top: 0;
+        background: #14161b; font-size: 12px; }
+  td.name, th:nth-child(2) { text-align: left; font-weight: 600; }
+  td.rank { color: #5b6070; }
+  td.role { font-weight: 700; }
+  td.role.core { color: #7ee0a1; }
+  td.role.support { color: #c8a5ff; }
+  td.rate { color: #8a90a0; font-size: 12px; }
+  td.heroes { text-align: left; color: #a6acbb; max-width: 300px;
+               overflow: hidden; text-overflow: ellipsis; }
+  tbody tr:hover { background: #1b1e26; }
+  td.best { color: #7ee0a1; font-weight: 700; }
+  .cards { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .card { background: #1b1e26; border: 1px solid #242832; border-radius: 10px;
+           padding: 12px 18px; min-width: 120px; }
+  .card .k { color: #8a90a0; font-size: 12px; }
+  .card .v { font-size: 20px; font-weight: 700; margin-top: 4px; }
+</style></head><body>
+<h1>Dota 2 玩家统计</h1>
+<div class="sub">共 8 场比赛 · 按胜率降序 · 定位依据：队内净资产排名 1–3 为核心，4–5 为酱油</div>
+<div class="cards">
+  <div class="card"><div class="k">比赛场次</div><div class="v">8</div></div>
+  <div class="card"><div class="k">玩家数</div><div class="v">13</div></div>
+  <div class="card"><div class="k">最高胜率</div><div class="v">75.0%</div></div>
+  <div class="card"><div class="k">最高平均 GPM</div><div class="v">623.4</div></div>
+</div>
+<table>
+<thead><tr>
+<th>#</th><th>玩家</th><th>场次</th><th>胜-负</th><th>胜率</th>
+<th>定位</th><th>核心率</th><th>全场排名</th><th>队内排名</th>
+<th>GPM</th><th>XPM</th><th>KDA</th><th>平均K/D/A</th><th>补刀</th>
+<th>净资产(K)</th><th>英雄伤害(K)</th><th>伤害/经济</th><th>常用英雄</th>
+</tr></thead>
+<tbody>
+<tr>
+<td class="rank">1</td><td class="name">木小可</td>
+<td>8</td><td>6-2</td>
+<td class="best">75.0%</td>
+<td class="role support">酱油</td>
+<td class="rate">25%</td>
+<td>6.5</td><td>3.88</td>
+<td class="">351.5</td>
+<td>561.1</td>
+<td>3.93</td>
+<td>4.8/5.6/17.4</td>
+<td>100.6</td>
+<td>12.7K</td>
+<td>14.3K</td>
+<td>1.19</td>
+<td class="heroes">Lion(1), Enigma(1), Kunkka(1)</td>
+</tr><tr>
+<td class="rank">2</td><td class="name">WW</td>
+<td>6</td><td>4-2</td>
+<td class="">66.7%</td>
+<td class="role support">酱油</td>
+<td class="rate">33%</td>
+<td>6.67</td><td>3.67</td>
+<td class="">364.3</td>
+<td>560.3</td>
+<td>3.53</td>
+<td>4.8/6.3/17.5</td>
+<td>104.0</td>
+<td>12.7K</td>
+<td>16.9K</td>
+<td>1.43</td>
+<td class="heroes">VengefulSpirit(1), Lion(1), Sniper(1)</td>
+</tr><tr>
+<td class="rank">3</td><td class="name">不明AOE</td>
+<td>3</td><td>2-1</td>
+<td class="">66.7%</td>
+<td class="role core">核心</td>
+<td class="rate">100%</td>
+<td>5.0</td><td>2.33</td>
+<td class="">436.0</td>
+<td>616.7</td>
+<td>2.48</td>
+<td>5.7/8.3/15.0</td>
+<td>152.7</td>
+<td>15.3K</td>
+<td>24.7K</td>
+<td>1.25</td>
+<td class="heroes">Undying(1), Juggernaut(1), Spectre(1)</td>
+</tr><tr>
+<td class="rank">4</td><td class="name">假赛王，拱手让冠军</td>
+<td>8</td><td>5-3</td>
+<td class="">62.5%</td>
+<td class="role core">核心</td>
+<td class="rate">88%</td>
+<td>3.38</td><td>2.12</td>
+<td class="best">623.4</td>
+<td>879.1</td>
+<td>4.3</td>
+<td>12.1/5.5/11.5</td>
+<td>296.4</td>
+<td>22.8K</td>
+<td>34.4K</td>
+<td>1.50</td>
+<td class="heroes">Sven(2), Tidehunter(1), SkeletonKing(1)</td>
+</tr><tr>
+<td class="rank">5</td><td class="name">young zhu</td>
+<td>8</td><td>5-3</td>
+<td class="">62.5%</td>
+<td class="role core">核心</td>
+<td class="rate">100%</td>
+<td>2.88</td><td>1.75</td>
+<td class="">535.5</td>
+<td>770.8</td>
+<td>4.19</td>
+<td>9.6/5.4/12.9</td>
+<td>221.5</td>
+<td>18.6K</td>
+<td>31.3K</td>
+<td>1.62</td>
+<td class="heroes">Obsidian_Destroyer(1), MonkeyKing(1), Skywrath_Mage(1)</td>
+</tr><tr>
+<td class="rank">6</td><td class="name">龙鸣</td>
+<td>7</td><td>4-3</td>
+<td class="">57.1%</td>
+<td class="role core">核心</td>
+<td class="rate">57%</td>
+<td>5.43</td><td>3.14</td>
+<td class="">413.1</td>
+<td>614.9</td>
+<td>3.42</td>
+<td>5.0/6.9/18.4</td>
+<td>152.9</td>
+<td>15.0K</td>
+<td>23.7K</td>
+<td>1.59</td>
+<td class="heroes">Silencer(1), PhantomAssassin(1), DrowRanger(1)</td>
+</tr><tr>
+<td class="rank">7</td><td class="name">我才是乃龙</td>
+<td>2</td><td>1-1</td>
+<td class="">50.0%</td>
+<td class="role core">核心</td>
+<td class="rate">100%</td>
+<td>5.0</td><td>2.5</td>
+<td class="">538.0</td>
+<td>704.5</td>
+<td>3.38</td>
+<td>11.5/8.0/15.5</td>
+<td>240.5</td>
+<td>19.7K</td>
+<td>47.3K</td>
+<td>2.47</td>
+<td class="heroes">Lina(1), Axe(1)</td>
+</tr><tr>
+<td class="rank">8</td><td class="name">西恩DoTA亡</td>
+<td>7</td><td>3-4</td>
+<td class="">42.9%</td>
+<td class="role core">核心</td>
+<td class="rate">100%</td>
+<td>2.86</td><td>2.0</td>
+<td class="">537.3</td>
+<td>715.1</td>
+<td>5.55</td>
+<td>9.1/4.1/13.9</td>
+<td>252.6</td>
+<td>19.0K</td>
+<td>21.9K</td>
+<td>1.12</td>
+<td class="heroes">Furion(1), Void_Spirit(1), Lina(1)</td>
+</tr><tr>
+<td class="rank">9</td><td class="name">大超哥</td>
+<td>8</td><td>3-5</td>
+<td class="">37.5%</td>
+<td class="role core">核心</td>
+<td class="rate">100%</td>
+<td>3.0</td><td>1.38</td>
+<td class="">607.6</td>
+<td>809.2</td>
+<td>3.73</td>
+<td>12.9/6.4/10.9</td>
+<td>313.5</td>
+<td>21.2K</td>
+<td>38.0K</td>
+<td>1.64</td>
+<td class="heroes">PhantomAssassin(1), Leshrac(1), Mars(1)</td>
+</tr><tr>
+<td class="rank">10</td><td class="name">肛客</td>
+<td>6</td><td>2-4</td>
+<td class="">33.3%</td>
+<td class="role support">酱油</td>
+<td class="rate">33%</td>
+<td>7.5</td><td>3.83</td>
+<td class="">340.0</td>
+<td>479.3</td>
+<td>1.55</td>
+<td>2.5/9.7/12.5</td>
+<td>111.3</td>
+<td>10.6K</td>
+<td>12.6K</td>
+<td>1.23</td>
+<td class="heroes">Shredder(1), NightStalker(1), Bristleback(1)</td>
+</tr><tr>
+<td class="rank">11</td><td class="name">奶龙</td>
+<td>6</td><td>2-4</td>
+<td class="">33.3%</td>
+<td class="role support">酱油</td>
+<td class="rate">33%</td>
+<td>8.67</td><td>4.33</td>
+<td class="">328.2</td>
+<td>501.7</td>
+<td>2.98</td>
+<td>4.0/8.3/20.8</td>
+<td>87.7</td>
+<td>10.6K</td>
+<td>19.8K</td>
+<td>1.89</td>
+<td class="heroes">Winter_Wyvern(1), Earthshaker(1), ShadowShaman(1)</td>
+</tr><tr>
+<td class="rank">12</td><td class="name">猪猪侠</td>
+<td>3</td><td>1-2</td>
+<td class="">33.3%</td>
+<td class="role support">酱油</td>
+<td class="rate">33%</td>
+<td>8.33</td><td>4.33</td>
+<td class="">294.7</td>
+<td>430.3</td>
+<td>1.54</td>
+<td>2.3/11.7/15.7</td>
+<td>92.3</td>
+<td>10.7K</td>
+<td>20.1K</td>
+<td>1.77</td>
+<td class="heroes">Warlock(1), Jakiro(1), Bristleback(1)</td>
+</tr><tr>
+<td class="rank">13</td><td class="name">不会不学不练</td>
+<td>8</td><td>2-6</td>
+<td class="">25.0%</td>
+<td class="role support">酱油</td>
+<td class="rate">0%</td>
+<td>8.62</td><td>4.38</td>
+<td class="">292.6</td>
+<td>446.9</td>
+<td>1.77</td>
+<td>2.8/9.8/14.5</td>
+<td>65.0</td>
+<td>10.0K</td>
+<td>12.6K</td>
+<td>1.36</td>
+<td class="heroes">Lich(1), CrystalMaiden(1), Nyx_Assassin(1)</td>
+</tr>
+</tbody></table>
+</body></html>

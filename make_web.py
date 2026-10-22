@@ -18,7 +18,7 @@ from datetime import datetime
 import balance
 import stats
 
-REPLAY_ROOT = os.path.join(os.path.expanduser("~"), "Desktop", "replay")
+REPLAY_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 def collect_players():

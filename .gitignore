@@ -8,8 +8,8 @@ __pycache__/
 # 上游库（按需 git clone，不纳入本仓库）
 manta/
 
-# 旧数据副本（正式数据在 桌面/replay/json）
-matches/
+# 解析出的原始实体转储（体积大，不进 git）
+json/*_raw.json
 
 # 探针脚本产生的临时实体转储
 mantatool/*.json

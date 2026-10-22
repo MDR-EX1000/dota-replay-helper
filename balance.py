@@ -36,7 +36,7 @@ from collections import defaultdict
 from itertools import combinations
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MATCHES_DIR = os.path.join(os.path.expanduser("~"), "Desktop", "replay", "json")
+MATCHES_DIR = os.path.join(SCRIPT_DIR, "json")
 
 K_FACTOR = 32
 BASE = 1000.0

@@ -5,18 +5,36 @@
 ## 数据流
 
 ```
-.dem 重放
+dem/*.dem
    │  （manta 本地解析）
    ▼
-Desktop\replay\json\match_*.json
+json/match_*.json
    │
-   ├── stats.py      → Desktop\replay\player_stats.csv / .html
+   ├── stats.py      → player_stats.csv / .html
    ├── balance.py    → 每人综合评分与分队建议
    ├── roll.py       → 规则化 roll，终端输出
-   └── make_web.py   → Desktop\replay\index.html（三 Tab 动态网页）
+   └── make_web.py   → index.html（三 Tab 动态网页）
 ```
 
 ## 目录
+
+仓库根目录就是 `C:\Users\admin\Desktop\replay`。
+
+```
+replay/
+├── stats.py / balance.py / roll.py / make_web.py
+├── aliases.json               # 多账号合并
+├── baselines.json             # 核心/酱油表现分基准
+├── mantatool/                 # Go 解析器源码与 parse.exe
+├── dem/                       # .dem 重放（git 忽略）
+├── json/
+│   ├── match_*.json           # 结构化结果（入库）
+│   └── match_*_raw.json       # 原始实体转储（git 忽略）
+├── index.html                 # 生成的三 Tab 网页
+├── player_stats.csv / .html   # 生成的汇总表
+├── manta/                     # 上游解析库（git 忽略，按需 git clone）
+└── 一键统计.bat / 一键打开网页.bat
+```
 
 | 路径 | 说明 |
 |---|---|
@@ -29,16 +47,6 @@ Desktop\replay\json\match_*.json
 | `mantatool/parse.go` | 重放解析器（Go + manta），输出 JSON |
 | `一键统计.bat` | 重新生成汇总表 |
 | `一键打开网页.bat` | 重新生成并打开网页 |
-
-比赛数据与重放不在本仓库内：
-
-```
-C:\Users\admin\Desktop\replay\
-├── dem\       # .dem 重放（不进 git）
-├── json\      # 解析结果（结构化 JSON + _raw.json）
-├── index.html
-└── player_stats.csv / .html
-```
 
 ## 常用命令
 

@@ -344,7 +344,12 @@ func main() {
 		fmt.Println("usage: parse <demo...>")
 		return
 	}
-	outDir := `C:\Users\admin\Desktop\replay\json`
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Println("cannot locate executable:", err)
+		return
+	}
+	outDir := filepath.Join(filepath.Dir(exe), "..", "json")
 	os.MkdirAll(outDir, 0755)
 	for _, path := range os.Args[1:] {
 		if err := parse(path, outDir); err != nil {

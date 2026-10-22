@@ -34,7 +34,7 @@ import sys
 from collections import defaultdict
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MATCHES_DIR = os.path.join(os.path.expanduser("~"), "Desktop", "replay", "json")
+DEFAULT_MATCHES_DIR = os.path.join(SCRIPT_DIR, "json")
 
 
 def load_matches(matches_dir):
