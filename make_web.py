@@ -208,7 +208,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       <tr><td>伤害/经济</td><td>30%</td><td>1.59 / 1.40</td></tr>
     </table>
     <p><code>原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]</code><br>
-       再按场次收缩：<code>1000 + (原始表现−1000) × n/(n+5)</code>。</p>
+       再按场次收缩：<code>1000 + (原始表现−1000) × n/(n+4)</code>。</p>
   </div>
 
   <div class="rules-box">

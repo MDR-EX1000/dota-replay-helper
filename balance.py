@@ -16,7 +16,7 @@
                    核心 KDA 3.7 / GPM 540 / XPM 720 / 伤害经济比 1.59
                    酱油 KDA 2.4 / GPM 335 / XPM 490 / 伤害经济比 1.40
                  原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]
-                 场次收缩：1000 + (原始表现−1000) × n/(n+5)
+                 场次收缩：1000 + (原始表现−1000) × n/(n+4)
     综合分     : 0.6 × Elo + 0.4 × 表现分
                  （Elo 已包含胜负信息，胜率只展示，不重复计分）
 
@@ -185,7 +185,7 @@ def build_ratings(matches):
         )
         raw = BASE + 500.0 * score
         n = r["games"]
-        shrink = n / (n + 5.0)
+        shrink = n / (n + 4.0)
         perf[k] = max(BASE - 500.0, min(BASE + 500.0, BASE + (raw - BASE) * shrink))
 
     players = {}
