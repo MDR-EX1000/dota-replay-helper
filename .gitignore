@@ -34,3 +34,6 @@ roll_*.txt
 
 # 比赛重放（体积大，不进 git）
 *.dem
+
+# 录像扫描状态（本地）
+scan_state.json

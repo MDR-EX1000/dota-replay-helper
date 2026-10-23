@@ -31,7 +31,8 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 ```
 replay/
 ├── stats.py / balance.py / roll.py / make_web.py
-├── deploy_tcb.py              # 腾讯云静态发布
+├── deploy_tcb.py              # 腾讯云静态发布（发布前自动扫描新录像）
+├── scan_new.py                # 扫描 replays 目录，解析新增练习赛
 ├── deploy_ai.py               # 部署 AI 云函数
 ├── cloudfunctions/roll-ai/    # DeepSeek 代理云函数
 ├── cloudbaserc.example.json   # 云函数配置模板（真实配置不入库）
@@ -56,7 +57,8 @@ replay/
 | `balance.py` | 计算 Elo + 表现分，枚举并排序 5v5 分法 |
 | `roll.py` | 规则化 roll（R1–R5），只在合格方案里随机 |
 | `make_web.py` | 生成三 Tab 网页到 `docs/index.html` |
-| `deploy_tcb.py` | 生成 → 上传到腾讯云 CloudBase 静态托管 |
+| `deploy_tcb.py` | 扫描新录像 → 生成 → 上传到腾讯云 CloudBase |
+| `scan_new.py` | 扫描 `replays` 目录，解析新增练习赛并写入 `json/` |
 | `deploy_ai.py` | 部署 `roll-ai` 云函数，写入 AI 端点并重新发布网页 |
 | `cloudfunctions/roll-ai/` | DeepSeek 代理：对话、工具调用、限流 |
 | `cloudbase.json` | 环境 ID、默认访问域名、`ai_endpoint` |
@@ -77,7 +79,16 @@ replay/
 一键发布到腾讯云.bat
 ```
 
-它会重新生成网页，然后上传到 CloudBase 静态托管。
+它会：
+
+1. 扫描 Dota `replays` 目录最近 7 天的新 `.dem`
+2. 只解析新增的练习赛；**已经解析过的会跳过**
+   - `scan_state.json` 记录文件大小/修改时间
+   - 即使状态文件丢失，只要 `json/match_*.json` 已存在也不会重复解析
+3. 重新生成统计和网页
+4. 上传到 CloudBase 静态托管
+
+重放目录默认是 `D:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\replays`，可用环境变量 `DOTA_REPLAY_DIR` 覆盖。
 
 前置条件：
 
@@ -122,7 +133,8 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 ```bash
 python stats.py          # 汇总统计
 python make_web.py       # 生成 docs/index.html
-python deploy_tcb.py     # 发布到腾讯云
+python scan_new.py       # 手动扫描新录像
+python deploy_tcb.py     # 发布到腾讯云（会先自动扫描）
 python deploy_ai.py      # 部署/更新 AI 云函数并重新发布
 python roll.py "A" ... "J"
 ```

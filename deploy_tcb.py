@@ -15,6 +15,8 @@ import shutil
 import subprocess
 import sys
 
+import scan_new
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(ROOT, "cloudbase.json")
 SECRET = os.path.join(ROOT, "cloudbase.secret.json")
@@ -60,7 +62,13 @@ def main():
         print("cloudbase.json 中缺少 env_id")
         return 1
 
-    print("1/3 生成统计与网页…")
+    print("1/4 扫描新录像…")
+    try:
+        scan_new.scan()
+    except Exception as exc:
+        print(f"  扫描失败，继续使用现有 JSON: {exc}")
+
+    print("2/4 生成统计与网页…")
     for script in ("stats.py", "make_web.py"):
         subprocess.run([sys.executable, os.path.join(ROOT, script)], cwd=ROOT, check=True)
 
@@ -73,7 +81,7 @@ def main():
         print("自动登录失败，请检查 cloudbase.secret.json 或先手动 tcb login")
         return 1
 
-    print("2/3 上传到腾讯云…")
+    print("3/4 上传到腾讯云…")
     r = subprocess.run(
         [tcb, "hosting", "deploy", "docs", "-e", env_id,
          "--entry", "index.html", "--verify"],
@@ -84,7 +92,7 @@ def main():
         return 1
 
     domain = conf.get("domain", "")
-    print("3/3 完成")
+    print("4/4 完成")
     if domain:
         print(f"\n访问地址: {domain}")
     else:
