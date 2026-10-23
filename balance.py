@@ -17,7 +17,10 @@
                    酱油 KDA 2.4 / GPM 335 / XPM 490 / 伤害经济比 1.40
                  原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]
                  场次收缩：1000 + (原始表现−1000) × n/(n+5)
-    综合分     : 0.6 × Elo + 0.4 × 表现分
+    MMR 分     : 3000 MMR = 1000 分；每 1000 MMR 差 = 33.3 分
+                 MMR分 = 1000 + (MMR − 3000) / 30
+    综合分     : 0.4 × Elo + 0.3 × 表现分 + 0.3 × MMR分
+                 未登记 MMR 默认按 2000 计算
                  （Elo 已包含胜负信息，胜率只展示，不重复计分）
 
 分队:
@@ -70,6 +73,17 @@ def load_baselines():
         return DEFAULT_BASELINES
 
 
+def load_mmr():
+    path = os.path.join(SCRIPT_DIR, "mmr.json")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fp:
+            return {str(k): v for k, v in json.load(fp).items()}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 def load_aliases():
     path = os.path.join(SCRIPT_DIR, "aliases.json")
     if not os.path.isfile(path):
@@ -109,6 +123,7 @@ def identity(player, aliases, canonicals):
 def build_ratings(matches):
     aliases = load_aliases()
     canonicals = set(aliases.values())
+    mmr_map = load_mmr()
 
     elo = defaultdict(lambda: START_ELO)
     agg = {}
@@ -190,7 +205,23 @@ def build_ratings(matches):
 
     players = {}
     for k, r in agg.items():
-        rating = 0.6 * elo[k] + 0.4 * perf[k]
+        mmr_val = mmr_map.get(k)
+        if mmr_val is None:
+            for s in r["steamids"]:
+                if s in mmr_map:
+                    mmr_val = mmr_map[s]
+                    break
+        try:
+            mmr_num = int(mmr_val) if mmr_val is not None else None
+        except (TypeError, ValueError):
+            mmr_num = None
+
+        if mmr_num is None:
+            mmr_num = 2000  # 未登记默认 2000
+        # 3000 MMR = 1000 分；1000 MMR 差 = 33.3 分，与 Elo 方差同量级
+        mmr_rating = BASE + (mmr_num - 3000) / 30.0
+        rating = 0.4 * elo[k] + 0.3 * perf[k] + 0.3 * mmr_rating
+
         provisional = r["games"] < 2
         if provisional:
             rating = BASE
@@ -198,6 +229,8 @@ def build_ratings(matches):
             "name": k,
             "elo": round(elo[k], 1),
             "perf": round(perf[k], 1),
+            "mmr": mmr_num,
+            "mmr_rating": round(mmr_rating, 1),
             "rating": round(rating, 1),
             "provisional": provisional,
             "role": r["role"],
@@ -242,13 +275,13 @@ def generate(players, top_n):
 
 
 def print_ratings(players):
-    print(f"{'玩家':<18}{'综合':>7}{'Elo':>7}{'表现':>7}{'定位':>6}{'场次':>5}"
+    print(f"{'玩家':<18}{'综合':>7}{'Elo':>7}{'表现':>7}{'MMR':>6}{'定位':>6}{'场次':>5}"
           f"{'胜率':>8}{'KDA':>7}{'平均K/D/A':>18}{'GPM':>7}{'XPM':>7}")
-    print("-" * 108)
+    print("-" * 115)
     for p in sorted(players.values(), key=lambda x: -x["rating"]):
         mark = "*" if p.get("provisional") else ""
         print(f"{p['name'][:16] + mark:<18}{p['rating']:>7.1f}{p['elo']:>7.1f}{p['perf']:>7.1f}"
-              f"{p['role']:>6}{p['games']:>5}{p['win_rate']*100:>7.1f}%"
+              f"{str(p['mmr']):>6}{p['role']:>6}{p['games']:>5}{p['win_rate']*100:>7.1f}%"
               f"{p['kda']:>7.2f}{p['kd']:>18}{p['gpm']:>7.1f}{p['xpm']:>7.1f}")
     if any(p.get("provisional") for p in players.values()):
         print(f"* 场次少于 2 场，综合分暂按 {BASE:.0f} 处理")

@@ -232,6 +232,8 @@ def aggregate(matches):
             mmr_num = int(mmr_val) if mmr_val is not None else None
         except (TypeError, ValueError):
             mmr_num = None
+        if mmr_num is None:
+            mmr_num = 2000  # 未登记默认 2000
 
         result.append({
             "玩家": row["name"],
@@ -260,7 +262,7 @@ def aggregate(matches):
             "承受英雄伤害(K)": round(sum(row["hero_damage_taken"]) / n / 1000, 1),
             "伤害/经济": round(sum(row["dmg_ratio"]) / n, 2),
             "承伤/经济": round(sum(row["taken_ratio"]) / n, 2),
-            "MMR": mmr_num if mmr_num is not None else "-",
+            "MMR": mmr_num,
             "_mmr": mmr_num,
             "英雄池": len(row["heroes"]),
             "常用英雄": ", ".join(

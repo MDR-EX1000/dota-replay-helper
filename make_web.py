@@ -286,7 +286,8 @@ TEMPLATE = r"""<!DOCTYPE html>
 <section id="pane-rules" class="pane">
   <div class="rules-box">
     <h3 style="margin-top:0">一、评分口径</h3>
-    <p><code>综合分 = 0.6 × Elo + 0.4 × 表现分</code></p>
+    <p><code>综合分 = 0.4 × Elo + 0.3 × 表现分 + 0.3 × MMR分</code></p>
+    <p><code>MMR分 = 1000 + (MMR − 3000) / 30</code>：3000 MMR = 1000 分，每 1000 MMR 差约 33.3 分；未登记默认按 2000 计算。</p>
     <p style="color:#8a90a0">Elo 本身已经包含胜负信息，所以不再单独加胜率分，避免重复计算；胜率只在数据表中展示。</p>
     <p><b>Elo</b>：初始 1000，K=32。每场按队伍平均分计算期望胜率，再给 5 人同步加减。</p>
     <p><b>表现分</b>：绝对数值 + 位置基准（不做百分位排名），权重统一：</p>
