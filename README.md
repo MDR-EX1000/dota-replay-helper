@@ -30,6 +30,7 @@ replay/
 ├── cloudbase.json             # 腾讯云环境 ID 与访问域名
 ├── aliases.json               # 多账号合并（仅名字，不含 SteamID）
 ├── baselines.json             # 核心/酱油表现分基准
+├── hero_names_zh.json         # 英雄英文 key → 中文名
 ├── docs/index.html            # 公开网页
 ├── mantatool/                 # Go 解析器源码与 parse.exe
 ├── dem/                       # .dem 重放（git 忽略）
@@ -96,6 +97,22 @@ python roll.py "A" ... "J"
 ```
 
 表现分按位置设基准（核心 / 酱油，见 `baselines.json`，可直接改），并按场次 `n/(n+5)` 收缩。胜率只展示，不参与评分，避免与 Elo 重复计算。
+
+## 数据统计口径
+
+- 统计表默认按**胜率降序**，点击任意表头可切换排序（再点一次反向）
+- **造成英雄伤害** = `m_flHeroDamage`，对敌方英雄造成的伤害，不含小兵/建筑
+- **承受英雄伤害** = 战斗日志中敌方英雄对你造成的伤害，不含小兵/建筑
+- **伤害/经济**、**承伤/经济** = 对应伤害 ÷ 净资产
+- **常用英雄**显示中文名，映射来自 `hero_names_zh.json`
+
+新增比赛时先解析重放：
+
+```bash
+mantatool\parse.exe "D:\...\replays\905xxxxxxx.dem"
+```
+
+然后双击 `一键统计.bat` 或 `一键发布到腾讯云.bat`。
 
 ## 为什么 `.dem` 不进 git
 

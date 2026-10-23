@@ -100,6 +100,15 @@ func itemName(class string) string {
 	return snake(n)
 }
 
+func heroToken(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimPrefix(s, "npc_dota_hero_")
+	s = strings.TrimPrefix(s, "cdota_unit_hero_")
+	// 战斗日志用 snake_case，实体类名用 CamelCase，统一去掉下划线
+	s = strings.ReplaceAll(s, "_", "")
+	return s
+}
+
 func parse(path, outDir string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -121,6 +130,23 @@ func parse(path, outDir string) error {
 
 	var matchID uint64
 	var gameMode, gameWinner, endTime int64
+	damageTaken := map[string]int64{}
+
+	// 承受英雄伤害：战斗日志里目标为真英雄、攻击者为英雄的伤害之和
+	p.Callbacks.OnCMsgDOTACombatLogEntry(func(m *dota.CMsgDOTACombatLogEntry) error {
+		if m.GetType() != dota.DOTA_COMBATLOG_TYPES_DOTA_COMBATLOG_DAMAGE {
+			return nil
+		}
+		if !m.GetIsTargetHero() || m.GetIsTargetIllusion() || !m.GetIsAttackerHero() {
+			return nil
+		}
+		name, ok := p.LookupStringByIndex("CombatLogNames", int32(m.GetTargetName()))
+		if !ok {
+			return nil
+		}
+		damageTaken[heroToken(name)] += int64(m.GetValue())
+		return nil
+	})
 
 	p.Callbacks.OnCDemoFileInfo(func(m *dota.CDemoFileInfo) error {
 		g := m.GetGameInfo().GetDota()
@@ -296,6 +322,7 @@ func parse(path, outDir string) error {
 			"last_hits":                st.lastHits,
 			"denies":                   st.denies,
 			"hero_damage":              int64(st.heroDamage + 0.5),
+			"hero_damage_taken":        damageTaken[heroToken(heroName)],
 			"tower_damage":             int64(st.towerDamage + 0.5),
 			"hero_healing":             int64(st.healing + 0.5),
 			"stuns":                    st.stuns,

@@ -37,6 +37,18 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MATCHES_DIR = os.path.join(SCRIPT_DIR, "json")
 
 
+def load_hero_names():
+    path = os.path.join(SCRIPT_DIR, "hero_names_zh.json")
+    try:
+        with open(path, encoding="utf-8") as fp:
+            return json.load(fp)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+HERO_ZH = load_hero_names()
+
+
 def load_matches(matches_dir):
     files = sorted(
         f for f in glob.glob(os.path.join(matches_dir, "match_*.json"))
@@ -133,7 +145,7 @@ def aggregate(matches):
                 "gpm": [], "xpm": [],
                 "kills": 0, "deaths": 0, "assists": 0,
                 "last_hits": [], "net_worth": [], "hero_damage": [],
-                "dmg_ratio": [],
+                "dmg_ratio": [], "hero_damage_taken": [], "taken_ratio": [],
                 "heroes": defaultdict(int),
                 "rank_all": [], "rank_team": [],
             })
@@ -155,10 +167,14 @@ def aggregate(matches):
             row["last_hits"].append(p.get("last_hits", 0))
             net_worth = p.get("net_worth", 0)
             hero_damage = p.get("hero_damage", 0)
+            hero_damage_taken = p.get("hero_damage_taken", 0)
             row["net_worth"].append(net_worth)
             row["hero_damage"].append(hero_damage)
             row["dmg_ratio"].append(hero_damage / max(net_worth, 1))
-            hero = (p.get("hero_name") or "").replace("CDOTA_Unit_Hero_", "")
+            row["hero_damage_taken"].append(hero_damage_taken)
+            row["taken_ratio"].append(hero_damage_taken / max(net_worth, 1))
+            raw_hero = (p.get("hero_name") or "").replace("CDOTA_Unit_Hero_", "")
+            hero = HERO_ZH.get(raw_hero.lower().replace("_", ""), raw_hero)
             if hero:
                 row["heroes"][hero] += 1
 
@@ -214,8 +230,10 @@ def aggregate(matches):
             "场均助攻": round(row["assists"] / n, 1),
             "平均补刀": avg(row["last_hits"]),
             "平均净资产(K)": round(sum(row["net_worth"]) / n / 1000, 1),
-            "场均英雄伤害(K)": round(sum(row["hero_damage"]) / n / 1000, 1),
+            "造成英雄伤害(K)": round(sum(row["hero_damage"]) / n / 1000, 1),
+            "承受英雄伤害(K)": round(sum(row["hero_damage_taken"]) / n / 1000, 1),
             "伤害/经济": round(sum(row["dmg_ratio"]) / n, 2),
+            "承伤/经济": round(sum(row["taken_ratio"]) / n, 2),
             "英雄池": len(row["heroes"]),
             "常用英雄": ", ".join(
                 f"{h}({c})" for h, c in sorted(row["heroes"].items(), key=lambda x: -x[1])[:3]
@@ -230,7 +248,8 @@ def write_csv(rows, path):
     cols = ["玩家", "SteamID", "场次", "胜", "负", "胜率", "定位", "核心率",
             "全场经济平均排名", "队内经济平均排名",
             "平均GPM", "平均XPM", "KDA", "平均K/D/A", "场均击杀", "场均死亡", "场均助攻", "平均补刀",
-            "平均净资产(K)", "场均英雄伤害(K)", "伤害/经济", "英雄池", "常用英雄"]
+            "平均净资产(K)", "造成英雄伤害(K)", "承受英雄伤害(K)", "伤害/经济", "承伤/经济",
+            "英雄池", "常用英雄"]
     with open(path, "w", encoding="utf-8-sig", newline="") as fp:
         w = csv.DictWriter(fp, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
@@ -265,14 +284,16 @@ def write_html(rows, matches, path):
 <td>{r['场均击杀']}/{r['场均死亡']}/{r['场均助攻']}</td>
 <td>{r['平均补刀']}</td>
 <td>{r['平均净资产(K)']:.1f}K</td>
-<td>{r['场均英雄伤害(K)']:.1f}K</td>
+<td>{r['造成英雄伤害(K)']:.1f}K</td>
+<td>{r['承受英雄伤害(K)']:.1f}K</td>
 <td>{r['伤害/经济']:.2f}</td>
+<td>{r['承伤/经济']:.2f}</td>
 <td class="heroes">{html.escape(r['常用英雄'])}</td>
 </tr>""")
 
     doc = f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
-<title>Dota 2 玩家统计</title>
+<title>Dota 2 对黑数据统计</title>
 <style>
   :root {{ color-scheme: dark; }}
   body {{ margin: 0; padding: 32px; background: #14161b; color: #e6e8ec;
@@ -300,7 +321,7 @@ def write_html(rows, matches, path):
   .card .k {{ color: #8a90a0; font-size: 12px; }}
   .card .v {{ font-size: 20px; font-weight: 700; margin-top: 4px; }}
 </style></head><body>
-<h1>Dota 2 玩家统计</h1>
+<h1>Dota 2 对黑数据统计</h1>
 <div class="sub">共 {len(matches)} 场比赛 · 按胜率降序 · 定位依据：队内净资产排名 1–3 为核心，4–5 为酱油</div>
 <div class="cards">
   <div class="card"><div class="k">比赛场次</div><div class="v">{len(matches)}</div></div>
@@ -313,7 +334,7 @@ def write_html(rows, matches, path):
 <th>#</th><th>玩家</th><th>场次</th><th>胜-负</th><th>胜率</th>
 <th>定位</th><th>核心率</th><th>全场排名</th><th>队内排名</th>
 <th>GPM</th><th>XPM</th><th>KDA</th><th>平均K/D/A</th><th>补刀</th>
-<th>净资产(K)</th><th>英雄伤害(K)</th><th>伤害/经济</th><th>常用英雄</th>
+<th>净资产(K)</th><th>造成英雄伤害(K)</th><th>承受英雄伤害(K)</th><th>伤害/经济</th><th>承伤/经济</th><th>常用英雄</th>
 </tr></thead>
 <tbody>
 {''.join(body)}

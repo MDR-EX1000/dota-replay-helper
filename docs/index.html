@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dota 2 对黑助手</title>
+<title>Dota 2 对黑数据统计</title>
 <style>
   :root {
     color-scheme: dark;
@@ -55,7 +55,10 @@
   .table-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
   table { border-collapse:collapse; width:100%; font-size:12.5px; }
   th, td { padding:10px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--line); }
-  th { color:var(--muted); font-weight:500; background:#181b22; font-size:11.5px; position:sticky; top:0; }
+  th { color:var(--muted); font-weight:500; background:#181b22; font-size:11.5px; position:sticky; top:0;
+       cursor:pointer; user-select:none; }
+  th:hover { color:var(--text); }
+  th.left { text-align:left; }
   td.name, th:nth-child(1) { text-align:left; font-weight:600; }
   tbody tr:hover { background:#1b1f28; }
   tbody tr:last-child td { border-bottom:0; }
@@ -94,8 +97,8 @@
 </head>
 <body>
 <header>
-  <h1>Dota 2 对黑助手</h1>
-  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-23 00:42</div>
+  <h1>Dota 2 对黑数据统计</h1>
+  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-23 12:52</div>
 </header>
 
 <nav class="tabs">
@@ -105,15 +108,10 @@
 </nav>
 
 <section id="pane-stats" class="pane active">
-  <h2>玩家数据汇总（按胜率降序）</h2>
+  <h2>玩家数据汇总（默认按胜率降序，点击表头切换排序）</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr>
-        <th>玩家</th><th>综合</th><th>场次</th><th>胜-负</th><th>胜率</th>
-        <th>定位</th><th>核心率</th><th>全场排名</th><th>队内排名</th>
-        <th>KDA</th><th>平均K/D/A</th><th>GPM</th><th>XPM</th>
-        <th>净资产(K)</th><th>英雄伤害(K)</th><th>伤害/经济</th><th>常用英雄</th>
-      </tr></thead>
+      <thead id="statsHead"></thead>
       <tbody id="statsBody"></tbody>
     </table>
   </div>
@@ -181,11 +179,13 @@
     <h3 style="margin-top:0">四、数据来源</h3>
     <p>比赛重放（.dem）在本地用 manta 解析成 JSON，存于 <code>Desktop\replay\json</code>；
        汇总表和本页面由脚本从同一批 JSON 重新计算，不依赖第三方 API。</p>
+    <p><b>伤害口径</b>：造成英雄伤害 = 对敌方英雄造成的伤害（<code>m_flHeroDamage</code>）；
+       承受英雄伤害 = 战斗日志中敌方英雄对你造成的伤害。两者都不含小兵和防御塔。</p>
   </div>
 </section>
 
 <script>
-const PLAYERS = [{"name": "木小可", "rating": 1064.4, "elo": 1058.3, "perf": 1073.6, "role": "酱油", "provisional": false, "games": 8, "wins": 6, "losses": 2, "winRate": 75.0, "coreRate": "25%", "rankAll": 6.5, "rankTeam": 3.88, "kda": 3.93, "kd": "4.8/5.6/17.4", "gpm": 351.5, "xpm": 561.1, "nwK": 12.7, "dmgK": 14.3, "dmgGold": 1.19, "heroes": "Lion(1), Enigma(1), Kunkka(1)"}, {"name": "WW", "rating": 1047.1, "elo": 1037.0, "perf": 1062.3, "role": "酱油", "provisional": false, "games": 6, "wins": 4, "losses": 2, "winRate": 66.7, "coreRate": "33%", "rankAll": 6.67, "rankTeam": 3.67, "kda": 3.53, "kd": "4.8/6.3/17.5", "gpm": 364.3, "xpm": 560.3, "nwK": 12.7, "dmgK": 16.9, "dmgGold": 1.43, "heroes": "VengefulSpirit(1), Lion(1), Sniper(1)"}, {"name": "不明AOE", "rating": 992.1, "elo": 1017.7, "perf": 953.7, "role": "核心", "provisional": false, "games": 3, "wins": 2, "losses": 1, "winRate": 66.7, "coreRate": "100%", "rankAll": 5.0, "rankTeam": 2.33, "kda": 2.48, "kd": "5.7/8.3/15.0", "gpm": 436.0, "xpm": 616.7, "nwK": 15.3, "dmgK": 24.7, "dmgGold": 1.25, "heroes": "Undying(1), Juggernaut(1), Spectre(1)"}, {"name": "假赛王，拱手让冠军", "rating": 1028.1, "elo": 1025.4, "perf": 1032.0, "role": "核心", "provisional": false, "games": 8, "wins": 5, "losses": 3, "winRate": 62.5, "coreRate": "88%", "rankAll": 3.38, "rankTeam": 2.12, "kda": 4.3, "kd": "12.1/5.5/11.5", "gpm": 623.4, "xpm": 879.1, "nwK": 22.8, "dmgK": 34.4, "dmgGold": 1.5, "heroes": "Sven(2), Tidehunter(1), SkeletonKing(1)"}, {"name": "young zhu", "rating": 1023.6, "elo": 1025.4, "perf": 1020.9, "role": "核心", "provisional": false, "games": 8, "wins": 5, "losses": 3, "winRate": 62.5, "coreRate": "100%", "rankAll": 2.88, "rankTeam": 1.75, "kda": 4.19, "kd": "9.6/5.4/12.9", "gpm": 535.5, "xpm": 770.8, "nwK": 18.6, "dmgK": 31.3, "dmgGold": 1.62, "heroes": "Obsidian_Destroyer(1), MonkeyKing(1), Skywrath_Mage(1)"}, {"name": "龙鸣", "rating": 999.8, "elo": 1016.8, "perf": 974.3, "role": "核心", "provisional": false, "games": 7, "wins": 4, "losses": 3, "winRate": 57.1, "coreRate": "57%", "rankAll": 5.43, "rankTeam": 3.14, "kda": 3.42, "kd": "5.0/6.9/18.4", "gpm": 413.1, "xpm": 614.9, "nwK": 15.0, "dmgK": 23.7, "dmgGold": 1.59, "heroes": "Silencer(1), PhantomAssassin(1), DrowRanger(1)"}, {"name": "我才是乃龙", "rating": 1006.6, "elo": 998.9, "perf": 1018.2, "role": "核心", "provisional": false, "games": 2, "wins": 1, "losses": 1, "winRate": 50.0, "coreRate": "100%", "rankAll": 5.0, "rankTeam": 2.5, "kda": 3.38, "kd": "11.5/8.0/15.5", "gpm": 538.0, "xpm": 704.5, "nwK": 19.7, "dmgK": 47.3, "dmgGold": 2.47, "heroes": "Lina(1), Axe(1)"}, {"name": "西恩DoTA亡", "rating": 1004.9, "elo": 987.0, "perf": 1031.8, "role": "核心", "provisional": false, "games": 7, "wins": 3, "losses": 4, "winRate": 42.9, "coreRate": "100%", "rankAll": 2.86, "rankTeam": 2.0, "kda": 5.55, "kd": "9.1/4.1/13.9", "gpm": 537.3, "xpm": 715.1, "nwK": 19.0, "dmgK": 21.9, "dmgGold": 1.12, "heroes": "Furion(1), Void_Spirit(1), Lina(1)"}, {"name": "大超哥", "rating": 990.8, "elo": 974.6, "perf": 1015.1, "role": "核心", "provisional": false, "games": 8, "wins": 3, "losses": 5, "winRate": 37.5, "coreRate": "100%", "rankAll": 3.0, "rankTeam": 1.38, "kda": 3.73, "kd": "12.9/6.4/10.9", "gpm": 607.6, "xpm": 809.2, "nwK": 21.2, "dmgK": 38.0, "dmgGold": 1.64, "heroes": "PhantomAssassin(1), Leshrac(1), Mars(1)"}, {"name": "奶龙", "rating": 1005.0, "elo": 971.6, "perf": 1055.2, "role": "酱油", "provisional": false, "games": 6, "wins": 2, "losses": 4, "winRate": 33.3, "coreRate": "33%", "rankAll": 8.67, "rankTeam": 4.33, "kda": 2.98, "kd": "4.0/8.3/20.8", "gpm": 328.2, "xpm": 501.7, "nwK": 10.6, "dmgK": 19.8, "dmgGold": 1.89, "heroes": "Winter_Wyvern(1), Earthshaker(1), ShadowShaman(1)"}, {"name": "猪猪侠", "rating": 980.7, "elo": 980.4, "perf": 981.1, "role": "酱油", "provisional": false, "games": 3, "wins": 1, "losses": 2, "winRate": 33.3, "coreRate": "33%", "rankAll": 8.33, "rankTeam": 4.33, "kda": 1.54, "kd": "2.3/11.7/15.7", "gpm": 294.7, "xpm": 430.3, "nwK": 10.7, "dmgK": 20.1, "dmgGold": 1.77, "heroes": "Warlock(1), Jakiro(1), Bristleback(1)"}, {"name": "肛客", "rating": 959.7, "elo": 965.2, "perf": 951.4, "role": "酱油", "provisional": false, "games": 6, "wins": 2, "losses": 4, "winRate": 33.3, "coreRate": "33%", "rankAll": 7.5, "rankTeam": 3.83, "kda": 1.55, "kd": "2.5/9.7/12.5", "gpm": 340.0, "xpm": 479.3, "nwK": 10.6, "dmgK": 12.6, "dmgGold": 1.23, "heroes": "Shredder(1), NightStalker(1), Bristleback(1)"}, {"name": "不会不学不练", "rating": 947.2, "elo": 941.7, "perf": 955.3, "role": "酱油", "provisional": false, "games": 8, "wins": 2, "losses": 6, "winRate": 25.0, "coreRate": "0%", "rankAll": 8.62, "rankTeam": 4.38, "kda": 1.77, "kd": "2.8/9.8/14.5", "gpm": 292.6, "xpm": 446.9, "nwK": 10.0, "dmgK": 12.6, "dmgGold": 1.36, "heroes": "Lich(1), CrystalMaiden(1), Nyx_Assassin(1)"}];
+const PLAYERS = [{"name": "木小可", "rating": 1064.4, "elo": 1058.3, "perf": 1073.6, "role": "酱油", "provisional": false, "games": 8, "wins": 6, "losses": 2, "winRate": 75.0, "coreRate": "25%", "rankAll": 6.5, "rankTeam": 3.88, "kda": 3.93, "kd": "4.8/5.6/17.4", "gpm": 351.5, "xpm": 561.1, "nwK": 12.7, "dmgK": 14.3, "dmgTakenK": 19.3, "dmgGold": 1.19, "takenGold": 1.56, "heroes": "莱恩(1), 谜团(1), 昆卡(1)"}, {"name": "WW", "rating": 1047.1, "elo": 1037.0, "perf": 1062.3, "role": "酱油", "provisional": false, "games": 6, "wins": 4, "losses": 2, "winRate": 66.7, "coreRate": "33%", "rankAll": 6.67, "rankTeam": 3.67, "kda": 3.53, "kd": "4.8/6.3/17.5", "gpm": 364.3, "xpm": 560.3, "nwK": 12.7, "dmgK": 16.9, "dmgTakenK": 18.8, "dmgGold": 1.43, "takenGold": 1.71, "heroes": "复仇之魂(1), 莱恩(1), 狙击手(1)"}, {"name": "不明AOE", "rating": 992.1, "elo": 1017.7, "perf": 953.7, "role": "核心", "provisional": false, "games": 3, "wins": 2, "losses": 1, "winRate": 66.7, "coreRate": "100%", "rankAll": 5.0, "rankTeam": 2.33, "kda": 2.48, "kd": "5.7/8.3/15.0", "gpm": 436.0, "xpm": 616.7, "nwK": 15.3, "dmgK": 24.7, "dmgTakenK": 20.6, "dmgGold": 1.25, "takenGold": 1.32, "heroes": "不朽尸王(1), 主宰(1), 幽鬼(1)"}, {"name": "假赛王，拱手让冠军", "rating": 1028.1, "elo": 1025.4, "perf": 1032.0, "role": "核心", "provisional": false, "games": 8, "wins": 5, "losses": 3, "winRate": 62.5, "coreRate": "88%", "rankAll": 3.38, "rankTeam": 2.12, "kda": 4.3, "kd": "12.1/5.5/11.5", "gpm": 623.4, "xpm": 879.1, "nwK": 22.8, "dmgK": 34.4, "dmgTakenK": 26.5, "dmgGold": 1.5, "takenGold": 1.22, "heroes": "斯温(2), 潮汐猎人(1), 冥魂大帝(1)"}, {"name": "young zhu", "rating": 1023.6, "elo": 1025.4, "perf": 1020.9, "role": "核心", "provisional": false, "games": 8, "wins": 5, "losses": 3, "winRate": 62.5, "coreRate": "100%", "rankAll": 2.88, "rankTeam": 1.75, "kda": 4.19, "kd": "9.6/5.4/12.9", "gpm": 535.5, "xpm": 770.8, "nwK": 18.6, "dmgK": 31.3, "dmgTakenK": 25.9, "dmgGold": 1.62, "takenGold": 1.41, "heroes": "殁境神蚀者(1), 齐天大圣(1), 天怒法师(1)"}, {"name": "龙鸣", "rating": 999.8, "elo": 1016.8, "perf": 974.3, "role": "核心", "provisional": false, "games": 7, "wins": 4, "losses": 3, "winRate": 57.1, "coreRate": "57%", "rankAll": 5.43, "rankTeam": 3.14, "kda": 3.42, "kd": "5.0/6.9/18.4", "gpm": 413.1, "xpm": 614.9, "nwK": 15.0, "dmgK": 23.7, "dmgTakenK": 22.0, "dmgGold": 1.59, "takenGold": 1.76, "heroes": "沉默术士(1), 幻影刺客(1), 卓尔游侠(1)"}, {"name": "我才是乃龙", "rating": 1006.6, "elo": 998.9, "perf": 1018.2, "role": "核心", "provisional": false, "games": 2, "wins": 1, "losses": 1, "winRate": 50.0, "coreRate": "100%", "rankAll": 5.0, "rankTeam": 2.5, "kda": 3.38, "kd": "11.5/8.0/15.5", "gpm": 538.0, "xpm": 704.5, "nwK": 19.7, "dmgK": 47.3, "dmgTakenK": 27.1, "dmgGold": 2.47, "takenGold": 1.88, "heroes": "莉娜(1), 斧王(1)"}, {"name": "西恩DoTA亡", "rating": 1004.9, "elo": 987.0, "perf": 1031.8, "role": "核心", "provisional": false, "games": 7, "wins": 3, "losses": 4, "winRate": 42.9, "coreRate": "100%", "rankAll": 2.86, "rankTeam": 2.0, "kda": 5.55, "kd": "9.1/4.1/13.9", "gpm": 537.3, "xpm": 715.1, "nwK": 19.0, "dmgK": 21.9, "dmgTakenK": 25.5, "dmgGold": 1.12, "takenGold": 1.27, "heroes": "自然先知(1), 虚无之灵(1), 莉娜(1)"}, {"name": "大超哥", "rating": 990.8, "elo": 974.6, "perf": 1015.1, "role": "核心", "provisional": false, "games": 8, "wins": 3, "losses": 5, "winRate": 37.5, "coreRate": "100%", "rankAll": 3.0, "rankTeam": 1.38, "kda": 3.73, "kd": "12.9/6.4/10.9", "gpm": 607.6, "xpm": 809.2, "nwK": 21.2, "dmgK": 38.0, "dmgTakenK": 25.2, "dmgGold": 1.64, "takenGold": 1.28, "heroes": "幻影刺客(1), 拉席克(1), 玛尔斯(1)"}, {"name": "奶龙", "rating": 1005.0, "elo": 971.6, "perf": 1055.2, "role": "酱油", "provisional": false, "games": 6, "wins": 2, "losses": 4, "winRate": 33.3, "coreRate": "33%", "rankAll": 8.67, "rankTeam": 4.33, "kda": 2.98, "kd": "4.0/8.3/20.8", "gpm": 328.2, "xpm": 501.7, "nwK": 10.6, "dmgK": 19.8, "dmgTakenK": 22.8, "dmgGold": 1.89, "takenGold": 2.11, "heroes": "寒冬飞龙(1), 撼地者(1), 暗影萨满(1)"}, {"name": "猪猪侠", "rating": 980.7, "elo": 980.4, "perf": 981.1, "role": "酱油", "provisional": false, "games": 3, "wins": 1, "losses": 2, "winRate": 33.3, "coreRate": "33%", "rankAll": 8.33, "rankTeam": 4.33, "kda": 1.54, "kd": "2.3/11.7/15.7", "gpm": 294.7, "xpm": 430.3, "nwK": 10.7, "dmgK": 20.1, "dmgTakenK": 29.3, "dmgGold": 1.77, "takenGold": 2.68, "heroes": "术士(1), 杰奇洛(1), 钢背兽(1)"}, {"name": "肛客", "rating": 959.7, "elo": 965.2, "perf": 951.4, "role": "酱油", "provisional": false, "games": 6, "wins": 2, "losses": 4, "winRate": 33.3, "coreRate": "33%", "rankAll": 7.5, "rankTeam": 3.83, "kda": 1.55, "kd": "2.5/9.7/12.5", "gpm": 340.0, "xpm": 479.3, "nwK": 10.6, "dmgK": 12.6, "dmgTakenK": 27.5, "dmgGold": 1.23, "takenGold": 2.64, "heroes": "伐木机(1), 暗夜魔王(1), 钢背兽(1)"}, {"name": "不会不学不练", "rating": 947.2, "elo": 941.7, "perf": 955.3, "role": "酱油", "provisional": false, "games": 8, "wins": 2, "losses": 6, "winRate": 25.0, "coreRate": "0%", "rankAll": 8.62, "rankTeam": 4.38, "kda": 1.77, "kd": "2.8/9.8/14.5", "gpm": 292.6, "xpm": 446.9, "nwK": 10.0, "dmgK": 12.6, "dmgTakenK": 21.7, "dmgGold": 1.36, "takenGold": 2.17, "heroes": "巫妖(1), 水晶室女(1), 司夜刺客(1)"}];
 const MATCH_COUNT = 8;
 const state = { selected: new Set(PLAYERS.map(p => p.name)) };
 const $ = (id) => document.getElementById(id);
@@ -203,28 +203,61 @@ function showTab(name) {
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+const STAT_COLUMNS = [
+  { key: "name", label: "玩家", type: "str", cls: "name", fmt: p => esc(p.name) },
+  { key: "rating", label: "综合", type: "num", fmt: p => p.rating.toFixed(1) },
+  { key: "games", label: "场次", type: "num", fmt: p => p.games },
+  { key: "wins", label: "胜-负", type: "num", fmt: p => `${p.wins}-${p.losses}`, get: p => p.wins },
+  { key: "winRate", label: "胜率", type: "num", fmt: p => p.winRate.toFixed(1) + "%" },
+  { key: "role", label: "定位", type: "str", fmt: p => p.role,
+    clsFn: p => p.role === "核心" ? "role-core" : "role-sup" },
+  { key: "coreRate", label: "核心率", type: "num", get: p => parseFloat(p.coreRate), fmt: p => p.coreRate },
+  { key: "rankAll", label: "全场排名", type: "num", fmt: p => Number(p.rankAll).toFixed(2) },
+  { key: "rankTeam", label: "队内排名", type: "num", fmt: p => Number(p.rankTeam).toFixed(2) },
+  { key: "kda", label: "KDA", type: "num", fmt: p => Number(p.kda).toFixed(2) },
+  { key: "kd", label: "平均K/D/A", type: "num", get: p => Number(p.kda), fmt: p => esc(p.kd) },
+  { key: "gpm", label: "GPM", type: "num", fmt: p => Number(p.gpm).toFixed(1) },
+  { key: "xpm", label: "XPM", type: "num", fmt: p => Number(p.xpm).toFixed(1) },
+  { key: "nwK", label: "净资产(K)", type: "num", fmt: p => Number(p.nwK).toFixed(1) },
+  { key: "dmgK", label: "造成英雄伤害(K)", type: "num", fmt: p => Number(p.dmgK).toFixed(1) },
+  { key: "dmgTakenK", label: "承受英雄伤害(K)", type: "num", fmt: p => Number(p.dmgTakenK).toFixed(1) },
+  { key: "dmgGold", label: "伤害/经济", type: "num", fmt: p => Number(p.dmgGold).toFixed(2) },
+  { key: "takenGold", label: "承伤/经济", type: "num", fmt: p => Number(p.takenGold).toFixed(2) },
+  { key: "heroes", label: "常用英雄", type: "str", cls: "heroes",
+    fmt: p => `<span title="${esc(p.heroes)}">${esc(p.heroes)}</span>` },
+];
+const statsSort = { key: "winRate", dir: -1 };
+
+function sortStats(key) {
+  const col = STAT_COLUMNS.find(c => c.key === key);
+  if (statsSort.key === key) statsSort.dir *= -1;
+  else { statsSort.key = key; statsSort.dir = col.type === "num" ? -1 : 1; }
+  renderStats();
+}
+
 function renderStats() {
   $("matchCount").textContent = MATCH_COUNT;
-  $("statsBody").innerHTML = PLAYERS.map(p => `
-    <tr>
-      <td class="name">${esc(p.name)}</td>
-      <td>${p.rating.toFixed(1)}</td>
-      <td>${p.games}</td>
-      <td>${p.wins}-${p.losses}</td>
-      <td>${p.winRate.toFixed(1)}%</td>
-      <td class="${p.role === "核心" ? "role-core" : "role-sup"}">${p.role}</td>
-      <td>${p.coreRate}</td>
-      <td>${Number(p.rankAll).toFixed(2)}</td>
-      <td>${Number(p.rankTeam).toFixed(2)}</td>
-      <td>${Number(p.kda).toFixed(2)}</td>
-      <td>${esc(p.kd)}</td>
-      <td>${Number(p.gpm).toFixed(1)}</td>
-      <td>${Number(p.xpm).toFixed(1)}</td>
-      <td>${Number(p.nwK).toFixed(1)}</td>
-      <td>${Number(p.dmgK).toFixed(1)}</td>
-      <td>${Number(p.dmgGold).toFixed(2)}</td>
-      <td class="heroes" title="${esc(p.heroes)}">${esc(p.heroes)}</td>
-    </tr>`).join("");
+  $("statsHead").innerHTML = "<tr>" + STAT_COLUMNS.map(c => {
+    const arrow = statsSort.key === c.key ? (statsSort.dir < 0 ? " ▼" : " ▲") : "";
+    const align = (c.cls === "name" || c.cls === "heroes") ? "left" : "";
+    return `<th class="${align}" onclick="sortStats('${c.key}')">${c.label}${arrow}</th>`;
+  }).join("") + "</tr>";
+
+  const col = STAT_COLUMNS.find(c => c.key === statsSort.key) || STAT_COLUMNS[4];
+  const rows = [...PLAYERS].sort((a, b) => {
+    let va = col.get ? col.get(a) : a[col.key];
+    let vb = col.get ? col.get(b) : b[col.key];
+    if (col.type === "num") {
+      va = Number(va) || 0; vb = Number(vb) || 0;
+      return (va - vb) * statsSort.dir;
+    }
+    return String(va).localeCompare(String(vb), "zh") * statsSort.dir;
+  });
+
+  $("statsBody").innerHTML = rows.map(p => "<tr>" + STAT_COLUMNS.map(c => {
+    const cls = c.clsFn ? c.clsFn(p) : (c.cls || "");
+    return `<td class="${cls}">${c.fmt(p)}</td>`;
+  }).join("") + "</tr>").join("");
 }
 
 /* ---------- 选人 ---------- */

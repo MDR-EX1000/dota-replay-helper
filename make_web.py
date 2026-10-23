@@ -50,8 +50,10 @@ def collect_players():
             "gpm": s.get("平均GPM", p["gpm"]),
             "xpm": s.get("平均XPM", p["xpm"]),
             "nwK": s.get("平均净资产(K)", 0),
-            "dmgK": s.get("场均英雄伤害(K)", 0),
+            "dmgK": s.get("造成英雄伤害(K)", 0),
+            "dmgTakenK": s.get("承受英雄伤害(K)", 0),
             "dmgGold": s.get("伤害/经济", 0),
+            "takenGold": s.get("承伤/经济", 0),
             "heroes": s.get("常用英雄", ""),
         })
     out.sort(key=lambda x: (-x["winRate"], -x["rating"]))
@@ -63,7 +65,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dota 2 对黑助手</title>
+<title>Dota 2 对黑数据统计</title>
 <style>
   :root {
     color-scheme: dark;
@@ -115,7 +117,10 @@ TEMPLATE = r"""<!DOCTYPE html>
   .table-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
   table { border-collapse:collapse; width:100%; font-size:12.5px; }
   th, td { padding:10px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--line); }
-  th { color:var(--muted); font-weight:500; background:#181b22; font-size:11.5px; position:sticky; top:0; }
+  th { color:var(--muted); font-weight:500; background:#181b22; font-size:11.5px; position:sticky; top:0;
+       cursor:pointer; user-select:none; }
+  th:hover { color:var(--text); }
+  th.left { text-align:left; }
   td.name, th:nth-child(1) { text-align:left; font-weight:600; }
   tbody tr:hover { background:#1b1f28; }
   tbody tr:last-child td { border-bottom:0; }
@@ -154,7 +159,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <h1>Dota 2 对黑助手</h1>
+  <h1>Dota 2 对黑数据统计</h1>
   <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 __TIME__</div>
 </header>
 
@@ -165,15 +170,10 @@ TEMPLATE = r"""<!DOCTYPE html>
 </nav>
 
 <section id="pane-stats" class="pane active">
-  <h2>玩家数据汇总（按胜率降序）</h2>
+  <h2>玩家数据汇总（默认按胜率降序，点击表头切换排序）</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr>
-        <th>玩家</th><th>综合</th><th>场次</th><th>胜-负</th><th>胜率</th>
-        <th>定位</th><th>核心率</th><th>全场排名</th><th>队内排名</th>
-        <th>KDA</th><th>平均K/D/A</th><th>GPM</th><th>XPM</th>
-        <th>净资产(K)</th><th>英雄伤害(K)</th><th>伤害/经济</th><th>常用英雄</th>
-      </tr></thead>
+      <thead id="statsHead"></thead>
       <tbody id="statsBody"></tbody>
     </table>
   </div>
@@ -241,6 +241,8 @@ TEMPLATE = r"""<!DOCTYPE html>
     <h3 style="margin-top:0">四、数据来源</h3>
     <p>比赛重放（.dem）在本地用 manta 解析成 JSON，存于 <code>Desktop\replay\json</code>；
        汇总表和本页面由脚本从同一批 JSON 重新计算，不依赖第三方 API。</p>
+    <p><b>伤害口径</b>：造成英雄伤害 = 对敌方英雄造成的伤害（<code>m_flHeroDamage</code>）；
+       承受英雄伤害 = 战斗日志中敌方英雄对你造成的伤害。两者都不含小兵和防御塔。</p>
   </div>
 </section>
 
@@ -263,28 +265,61 @@ function showTab(name) {
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+const STAT_COLUMNS = [
+  { key: "name", label: "玩家", type: "str", cls: "name", fmt: p => esc(p.name) },
+  { key: "rating", label: "综合", type: "num", fmt: p => p.rating.toFixed(1) },
+  { key: "games", label: "场次", type: "num", fmt: p => p.games },
+  { key: "wins", label: "胜-负", type: "num", fmt: p => `${p.wins}-${p.losses}`, get: p => p.wins },
+  { key: "winRate", label: "胜率", type: "num", fmt: p => p.winRate.toFixed(1) + "%" },
+  { key: "role", label: "定位", type: "str", fmt: p => p.role,
+    clsFn: p => p.role === "核心" ? "role-core" : "role-sup" },
+  { key: "coreRate", label: "核心率", type: "num", get: p => parseFloat(p.coreRate), fmt: p => p.coreRate },
+  { key: "rankAll", label: "全场排名", type: "num", fmt: p => Number(p.rankAll).toFixed(2) },
+  { key: "rankTeam", label: "队内排名", type: "num", fmt: p => Number(p.rankTeam).toFixed(2) },
+  { key: "kda", label: "KDA", type: "num", fmt: p => Number(p.kda).toFixed(2) },
+  { key: "kd", label: "平均K/D/A", type: "num", get: p => Number(p.kda), fmt: p => esc(p.kd) },
+  { key: "gpm", label: "GPM", type: "num", fmt: p => Number(p.gpm).toFixed(1) },
+  { key: "xpm", label: "XPM", type: "num", fmt: p => Number(p.xpm).toFixed(1) },
+  { key: "nwK", label: "净资产(K)", type: "num", fmt: p => Number(p.nwK).toFixed(1) },
+  { key: "dmgK", label: "造成英雄伤害(K)", type: "num", fmt: p => Number(p.dmgK).toFixed(1) },
+  { key: "dmgTakenK", label: "承受英雄伤害(K)", type: "num", fmt: p => Number(p.dmgTakenK).toFixed(1) },
+  { key: "dmgGold", label: "伤害/经济", type: "num", fmt: p => Number(p.dmgGold).toFixed(2) },
+  { key: "takenGold", label: "承伤/经济", type: "num", fmt: p => Number(p.takenGold).toFixed(2) },
+  { key: "heroes", label: "常用英雄", type: "str", cls: "heroes",
+    fmt: p => `<span title="${esc(p.heroes)}">${esc(p.heroes)}</span>` },
+];
+const statsSort = { key: "winRate", dir: -1 };
+
+function sortStats(key) {
+  const col = STAT_COLUMNS.find(c => c.key === key);
+  if (statsSort.key === key) statsSort.dir *= -1;
+  else { statsSort.key = key; statsSort.dir = col.type === "num" ? -1 : 1; }
+  renderStats();
+}
+
 function renderStats() {
   $("matchCount").textContent = MATCH_COUNT;
-  $("statsBody").innerHTML = PLAYERS.map(p => `
-    <tr>
-      <td class="name">${esc(p.name)}</td>
-      <td>${p.rating.toFixed(1)}</td>
-      <td>${p.games}</td>
-      <td>${p.wins}-${p.losses}</td>
-      <td>${p.winRate.toFixed(1)}%</td>
-      <td class="${p.role === "核心" ? "role-core" : "role-sup"}">${p.role}</td>
-      <td>${p.coreRate}</td>
-      <td>${Number(p.rankAll).toFixed(2)}</td>
-      <td>${Number(p.rankTeam).toFixed(2)}</td>
-      <td>${Number(p.kda).toFixed(2)}</td>
-      <td>${esc(p.kd)}</td>
-      <td>${Number(p.gpm).toFixed(1)}</td>
-      <td>${Number(p.xpm).toFixed(1)}</td>
-      <td>${Number(p.nwK).toFixed(1)}</td>
-      <td>${Number(p.dmgK).toFixed(1)}</td>
-      <td>${Number(p.dmgGold).toFixed(2)}</td>
-      <td class="heroes" title="${esc(p.heroes)}">${esc(p.heroes)}</td>
-    </tr>`).join("");
+  $("statsHead").innerHTML = "<tr>" + STAT_COLUMNS.map(c => {
+    const arrow = statsSort.key === c.key ? (statsSort.dir < 0 ? " ▼" : " ▲") : "";
+    const align = (c.cls === "name" || c.cls === "heroes") ? "left" : "";
+    return `<th class="${align}" onclick="sortStats('${c.key}')">${c.label}${arrow}</th>`;
+  }).join("") + "</tr>";
+
+  const col = STAT_COLUMNS.find(c => c.key === statsSort.key) || STAT_COLUMNS[4];
+  const rows = [...PLAYERS].sort((a, b) => {
+    let va = col.get ? col.get(a) : a[col.key];
+    let vb = col.get ? col.get(b) : b[col.key];
+    if (col.type === "num") {
+      va = Number(va) || 0; vb = Number(vb) || 0;
+      return (va - vb) * statsSort.dir;
+    }
+    return String(va).localeCompare(String(vb), "zh") * statsSort.dir;
+  });
+
+  $("statsBody").innerHTML = rows.map(p => "<tr>" + STAT_COLUMNS.map(c => {
+    const cls = c.clsFn ? c.clsFn(p) : (c.cls || "");
+    return `<td class="${cls}">${c.fmt(p)}</td>`;
+  }).join("") + "</tr>").join("");
 }
 
 /* ---------- 选人 ---------- */
