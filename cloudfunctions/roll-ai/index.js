@@ -120,15 +120,19 @@ function buildSystem(context) {
   ].join('\n');
 }
 
-async function callDeepSeek(key, system, messages) {
-  const body = {
+function deepSeekBody(system, messages, stream) {
+  return {
     model: MODEL,
     max_tokens: 3000,
     temperature: 0.5,
     system,
     messages,
-    tools: [DISPLAY_MATCH_TOOL]
+    tools: [DISPLAY_MATCH_TOOL],
+    stream: !!stream
   };
+}
+
+async function callDeepSeek(key, system, messages) {
   const resp = await fetch(DEEPSEEK_URL, {
     method: 'POST',
     headers: {
@@ -136,7 +140,7 @@ async function callDeepSeek(key, system, messages) {
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json'
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(deepSeekBody(system, messages, false))
   });
   const data = await resp.json().catch(() => null);
   if (!resp.ok) {
@@ -147,6 +151,49 @@ async function callDeepSeek(key, system, messages) {
     throw err;
   }
   return data || {};
+}
+
+async function streamDeepSeek(res, key, system, messages) {
+  const upstream = await fetch(DEEPSEEK_URL, {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify(deepSeekBody(system, messages, true))
+  });
+
+  if (!upstream.ok) {
+    const data = await upstream.json().catch(() => null);
+    const msg = (data && data.error && (data.error.message || data.error.type)) ||
+      `AI 服务错误 ${upstream.status}`;
+    send(res, 502, { error: String(msg).slice(0, 300) });
+    return;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+  const reader = upstream.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(Buffer.from(value));
+    }
+  } catch (e) {
+    try {
+      res.write(`event: error\ndata: ${JSON.stringify({ error: '流式响应中断' })}\n\n`);
+    } catch (_) {}
+  } finally {
+    res.end();
+  }
 }
 
 async function handle(req, res) {
@@ -192,6 +239,10 @@ async function handle(req, res) {
   }
 
   try {
+    if (payload.stream) {
+      await streamDeepSeek(res, key, buildSystem(context), messages);
+      return;
+    }
     const data = await callDeepSeek(key, buildSystem(context), messages);
     send(res, 200, {
       content: data.content || [],

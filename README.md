@@ -41,6 +41,7 @@ replay/
 ├── hero_names_zh.json         # 英雄英文 key → 中文名
 ├── mmr.json                   # 玩家 MMR 登记（默认空 = 未登记）
 ├── docs/index.html            # 公开网页
+├── docs/vendor/               # marked + DOMPurify（本地托管）
 ├── mantatool/                 # Go 解析器源码与 parse.exe
 ├── dem/                       # .dem 重放（git 忽略）
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
@@ -96,7 +97,8 @@ https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/
 
 Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后可以：
 
-- 和 DeepSeek 对话，让它解释、调整或重新生成阵容
+- 和 DeepSeek 流式对话，回复逐字出现
+- 助手回复按 Markdown 渲染（列表、粗体、代码块、表格），并用 DOMPurify 过滤 HTML
 - AI 提出具体阵容时调用 `display_match`，聊天中弹出对局卡片
 - 卡片上点「采用此阵容」可更新主结果区
 

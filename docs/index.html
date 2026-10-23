@@ -112,6 +112,19 @@
   .msg.assistant { align-self:flex-start; background:#1f2430; color:#cfd5e1; }
   .msg.system { align-self:center; background:#222733; color:var(--muted); font-size:12px; }
   .msg .err { color:var(--bad); }
+  .msg p { margin:0 0 8px; } .msg p:last-child { margin-bottom:0; }
+  .msg ul, .msg ol { margin:4px 0 8px; padding-left:20px; }
+  .msg li { margin:2px 0; }
+  .msg h1, .msg h2, .msg h3, .msg h4 { margin:6px 0 6px; font-size:14px; color:#e6e8ec; }
+  .msg code { background:#11141a; padding:1px 5px; border-radius:4px; font-size:11.5px; }
+  .msg pre { background:#11141a; border:1px solid var(--line); border-radius:7px;
+             padding:9px 11px; overflow-x:auto; margin:6px 0 8px; }
+  .msg pre code { background:none; padding:0; }
+  .msg a { color:var(--accent); }
+  .msg table { border-collapse:collapse; margin:6px 0 8px; font-size:11.5px; }
+  .msg th, .msg td { border:1px solid var(--line); padding:3px 7px; text-align:left; }
+  .msg.streaming::after { content:"▍"; color:var(--accent); animation:blink 1s infinite; }
+  @keyframes blink { 50% { opacity:0; } }
   .msg.match-wrap { max-width:96%; padding:0; background:transparent; }
   .typing { color:var(--muted); font-size:12px; padding:4px 2px; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; padding:8px 18px 0; }
@@ -139,11 +152,13 @@
     .drawer { width:100%; }
   }
 </style>
+<script src="vendor/marked.umd.js"></script>
+<script src="vendor/purify.min.js"></script>
 </head>
 <body>
 <header>
   <h1>Dota 2 对黑数据统计</h1>
-  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-23 13:34</div>
+  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-23 13:37</div>
 </header>
 
 <nav class="tabs">
@@ -623,6 +638,107 @@ async function sendAI(text) {
   $("aiInput").value = "";
   await runAILoop();
 }
+function md(text) {
+  if (window.marked) {
+    const html = window.marked.parse(text, { breaks: true, gfm: true });
+    return window.DOMPurify ? window.DOMPurify.sanitize(html) : html;
+  }
+  return esc(text).replace(/\n/g, "<br>");
+}
+function newStreamBubble() {
+  const d = document.createElement("div");
+  d.className = "msg assistant streaming";
+  $("aiMessages").appendChild(d);
+  return d;
+}
+function scheduleRender(el, text) {
+  if (!el || el._timer) return;
+  el._timer = setTimeout(() => {
+    el._timer = null;
+    el.innerHTML = md(text);
+    $("aiMessages").scrollTop = $("aiMessages").scrollHeight;
+  }, 60);
+}
+async function consumeSSE(res) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const blocks = [];
+  const bubbles = {};
+
+  const handle = (raw) => {
+    let event = "message", data = "";
+    for (const line of raw.split(/\r?\n/)) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) data += line.slice(5).trim();
+    }
+    if (!data) return;
+    let obj;
+    try { obj = JSON.parse(data); } catch (_) { return; }
+    const type = obj.type || event;
+    if (type === "error") {
+      addMsg("assistant", `<span class="err">${esc((obj.error && obj.error.message) || "AI 流式错误")}</span>`);
+      return;
+    }
+    if (type === "content_block_start") {
+      const b = obj.content_block || {};
+      const idx = obj.index;
+      if (b.type === "text") {
+        blocks[idx] = { type: "text", text: "" };
+        bubbles[idx] = newStreamBubble();
+      } else if (b.type === "tool_use") {
+        blocks[idx] = { type: "tool_use", id: b.id, name: b.name, inputJson: "" };
+      } else {
+        blocks[idx] = { type: b.type, ignored: true };
+      }
+    } else if (type === "content_block_delta") {
+      const b = blocks[obj.index];
+      if (!b) return;
+      const d = obj.delta || {};
+      if (d.type === "text_delta" && b.type === "text") {
+        b.text += d.text || "";
+        scheduleRender(bubbles[obj.index], b.text);
+      } else if (d.type === "input_json_delta" && b.type === "tool_use") {
+        b.inputJson += d.partial_json || "";
+      }
+    } else if (type === "content_block_stop") {
+      const b = blocks[obj.index];
+      if (b && b.type === "text" && bubbles[obj.index]) {
+        clearTimeout(bubbles[obj.index]._timer);
+        bubbles[obj.index].innerHTML = md(b.text);
+        bubbles[obj.index].classList.remove("streaming");
+      }
+      if (b && b.type === "tool_use") {
+        try { b.input = JSON.parse(b.inputJson || "{}"); } catch (_) { b.input = {}; }
+      }
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let m;
+    while ((m = buffer.match(/\r?\n\r?\n/))) {
+      const raw = buffer.slice(0, m.index);
+      buffer = buffer.slice(m.index + m[0].length);
+      handle(raw);
+    }
+  }
+  if (buffer.trim()) handle(buffer);
+  Object.values(bubbles).forEach(el => el.classList.remove("streaming"));
+
+  return blocks.filter(b => b && !b.ignored).map(b => {
+    if (b.type === "text") return { type: "text", text: b.text };
+    if (b.type === "tool_use") {
+      if (!b.input) {
+        try { b.input = JSON.parse(b.inputJson || "{}"); } catch (_) { b.input = {}; }
+      }
+      return { type: "tool_use", id: b.id, name: b.name, input: b.input };
+    }
+    return null;
+  }).filter(Boolean);
+}
 async function runAILoop() {
   setAIBusy(true);
   try {
@@ -631,21 +747,28 @@ async function runAILoop() {
       const res = await fetch(AI_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: state.ai.messages, context: aiContext() })
+        body: JSON.stringify({ messages: state.ai.messages, context: aiContext(), stream: true })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.error) {
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         addMsg("assistant", `<span class="err">${esc(data.error || ("请求失败 " + res.status))}</span>`);
         break;
       }
-      const content = data.content || [];
-      const blocks = content.filter(b => b.type === "text" || b.type === "tool_use");
-      for (const b of content) {
-        if (b.type === "text" && b.text && b.text.trim()) {
-          addMsg("assistant", esc(b.text).replace(/\n/g, "<br>"));
+
+      let blocks;
+      if (ct.includes("text/event-stream")) {
+        blocks = await consumeSSE(res);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        blocks = (data.content || []).filter(b => b.type === "text" || b.type === "tool_use");
+        for (const b of blocks) {
+          if (b.type === "text" && b.text && b.text.trim()) addMsg("assistant", md(b.text));
         }
       }
-      if (blocks.length) state.ai.messages.push({ role: "assistant", content: blocks });
+
+      const history = blocks.filter(b => b.type === "text" ? b.text.trim() : true);
+      if (history.length) state.ai.messages.push({ role: "assistant", content: history });
 
       const tools = blocks.filter(b => b.type === "tool_use" && b.name === "display_match");
       if (!tools.length) break;
