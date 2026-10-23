@@ -54,6 +54,8 @@ def collect_players():
             "dmgTakenK": s.get("承受英雄伤害(K)", 0),
             "dmgGold": s.get("伤害/经济", 0),
             "takenGold": s.get("承伤/经济", 0),
+            "mmr": s.get("MMR", "-"),
+            "mmrNum": s.get("_mmr"),
             "heroes": s.get("常用英雄", ""),
         })
     out.sort(key=lambda x: (-x["winRate"], -x["rating"]))
@@ -285,6 +287,7 @@ const STAT_COLUMNS = [
   { key: "dmgTakenK", label: "承受英雄伤害(K)", type: "num", fmt: p => Number(p.dmgTakenK).toFixed(1) },
   { key: "dmgGold", label: "伤害/经济", type: "num", fmt: p => Number(p.dmgGold).toFixed(2) },
   { key: "takenGold", label: "承伤/经济", type: "num", fmt: p => Number(p.takenGold).toFixed(2) },
+  { key: "mmr", label: "MMR", type: "num", get: p => p.mmrNum, fmt: p => p.mmr },
   { key: "heroes", label: "常用英雄", type: "str", cls: "heroes",
     fmt: p => `<span title="${esc(p.heroes)}">${esc(p.heroes)}</span>` },
 ];
@@ -310,8 +313,12 @@ function renderStats() {
     let va = col.get ? col.get(a) : a[col.key];
     let vb = col.get ? col.get(b) : b[col.key];
     if (col.type === "num") {
-      va = Number(va) || 0; vb = Number(vb) || 0;
-      return (va - vb) * statsSort.dir;
+      const aMissing = va === null || va === undefined || va === "" || Number.isNaN(Number(va));
+      const bMissing = vb === null || vb === undefined || vb === "" || Number.isNaN(Number(vb));
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;   // 未登记始终排在最后
+      if (bMissing) return -1;
+      return (Number(va) - Number(vb)) * statsSort.dir;
     }
     return String(va).localeCompare(String(vb), "zh") * statsSort.dir;
   });

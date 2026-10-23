@@ -49,6 +49,21 @@ def load_hero_names():
 HERO_ZH = load_hero_names()
 
 
+def load_mmr():
+    """读取 mmr.json：{玩家名或SteamID: MMR}，缺失表示未登记。"""
+    path = os.path.join(SCRIPT_DIR, "mmr.json")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fp:
+            return {str(k): v for k, v in json.load(fp).items()}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+MMR = load_mmr()
+
+
 def load_matches(matches_dir):
     files = sorted(
         f for f in glob.glob(os.path.join(matches_dir, "match_*.json"))
@@ -207,6 +222,17 @@ def aggregate(matches):
         if ov and ov.get("role"):
             role = ov["role"]
 
+        mmr_val = MMR.get(row["name"])
+        if mmr_val is None:
+            for s in row["steamids"]:
+                if s in MMR:
+                    mmr_val = MMR[s]
+                    break
+        try:
+            mmr_num = int(mmr_val) if mmr_val is not None else None
+        except (TypeError, ValueError):
+            mmr_num = None
+
         result.append({
             "玩家": row["name"],
             "SteamID": " / ".join(row["steamids"]),
@@ -234,6 +260,8 @@ def aggregate(matches):
             "承受英雄伤害(K)": round(sum(row["hero_damage_taken"]) / n / 1000, 1),
             "伤害/经济": round(sum(row["dmg_ratio"]) / n, 2),
             "承伤/经济": round(sum(row["taken_ratio"]) / n, 2),
+            "MMR": mmr_num if mmr_num is not None else "-",
+            "_mmr": mmr_num,
             "英雄池": len(row["heroes"]),
             "常用英雄": ", ".join(
                 f"{h}({c})" for h, c in sorted(row["heroes"].items(), key=lambda x: -x[1])[:3]
@@ -249,7 +277,7 @@ def write_csv(rows, path):
             "全场经济平均排名", "队内经济平均排名",
             "平均GPM", "平均XPM", "KDA", "平均K/D/A", "场均击杀", "场均死亡", "场均助攻", "平均补刀",
             "平均净资产(K)", "造成英雄伤害(K)", "承受英雄伤害(K)", "伤害/经济", "承伤/经济",
-            "英雄池", "常用英雄"]
+            "英雄池", "MMR", "常用英雄"]
     with open(path, "w", encoding="utf-8-sig", newline="") as fp:
         w = csv.DictWriter(fp, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
@@ -288,6 +316,7 @@ def write_html(rows, matches, path):
 <td>{r['承受英雄伤害(K)']:.1f}K</td>
 <td>{r['伤害/经济']:.2f}</td>
 <td>{r['承伤/经济']:.2f}</td>
+<td>{r['MMR']}</td>
 <td class="heroes">{html.escape(r['常用英雄'])}</td>
 </tr>""")
 
@@ -334,7 +363,7 @@ def write_html(rows, matches, path):
 <th>#</th><th>玩家</th><th>场次</th><th>胜-负</th><th>胜率</th>
 <th>定位</th><th>核心率</th><th>全场排名</th><th>队内排名</th>
 <th>GPM</th><th>XPM</th><th>KDA</th><th>平均K/D/A</th><th>补刀</th>
-<th>净资产(K)</th><th>造成英雄伤害(K)</th><th>承受英雄伤害(K)</th><th>伤害/经济</th><th>承伤/经济</th><th>常用英雄</th>
+<th>净资产(K)</th><th>造成英雄伤害(K)</th><th>承受英雄伤害(K)</th><th>伤害/经济</th><th>承伤/经济</th><th>MMR</th><th>常用英雄</th>
 </tr></thead>
 <tbody>
 {''.join(body)}

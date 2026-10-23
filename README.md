@@ -31,6 +31,7 @@ replay/
 ├── aliases.json               # 多账号合并（仅名字，不含 SteamID）
 ├── baselines.json             # 核心/酱油表现分基准
 ├── hero_names_zh.json         # 英雄英文 key → 中文名
+├── mmr.json                   # 玩家 MMR 登记（默认空 = 未登记）
 ├── docs/index.html            # 公开网页
 ├── mantatool/                 # Go 解析器源码与 parse.exe
 ├── dem/                       # .dem 重放（git 忽略）
@@ -50,6 +51,7 @@ replay/
 | `cloudbase.json` | 腾讯云环境 ID 与默认访问域名 |
 | `aliases.json` | 同一玩家多账号合并配置 |
 | `baselines.json` | 核心 / 酱油的表现分基准值，可分别调整 |
+| `mmr.json` | 玩家 MMR 登记，默认空（全部显示 `-`） |
 | `mantatool/parse.go` | 重放解析器（Go + manta），输出 JSON |
 | `一键统计.bat` | 重新生成汇总表 |
 | `一键打开网页.bat` | 重新生成并打开网页 |
@@ -105,6 +107,13 @@ python roll.py "A" ... "J"
 - **承受英雄伤害** = 战斗日志中敌方英雄对你造成的伤害，不含小兵/建筑
 - **伤害/经济**、**承伤/经济** = 对应伤害 ÷ 净资产
 - **常用英雄**显示中文名，映射来自 `hero_names_zh.json`
+- **MMR** 来自 `mmr.json`，未登记的玩家显示 `-`。登记格式：
+
+```json
+{
+  "玩家名或SteamID": 4500
+}
+```
 
 新增比赛时先解析重放：
 
