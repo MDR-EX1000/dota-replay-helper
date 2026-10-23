@@ -89,16 +89,61 @@
   .rules-box table { font-size:12.5px; }
   .rules-box td, .rules-box th { text-align:left; }
   .footer { margin-top:28px; color:#6f7585; font-size:11.5px; }
+
+  /* AI 匹配助手 */
+  .ai-action { display:none; align-items:center; gap:12px; margin:18px 0 8px; flex-wrap:wrap; }
+  .ai-hint { color:var(--muted); font-size:12px; }
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); opacity:0; pointer-events:none;
+             transition:opacity .2s; z-index:90; }
+  .overlay.on { opacity:1; pointer-events:auto; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:430px; max-width:100%;
+            background:#171a21; border-left:1px solid var(--line); z-index:100;
+            display:flex; flex-direction:column; transform:translateX(100%);
+            transition:transform .22s ease; }
+  .drawer.on { transform:translateX(0); }
+  .drawer-head { display:flex; justify-content:space-between; align-items:center;
+                 padding:16px 18px; border-bottom:1px solid var(--line); }
+  .drawer-title { font-weight:700; font-size:15px; }
+  .drawer-sub { color:var(--muted); font-size:11.5px; margin-top:3px; }
+  .chat { flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+  .msg { max-width:88%; padding:9px 12px; border-radius:10px; font-size:13px; line-height:1.65;
+         white-space:normal; word-break:break-word; }
+  .msg.user { align-self:flex-end; background:#233042; color:#e6e8ec; }
+  .msg.assistant { align-self:flex-start; background:#1f2430; color:#cfd5e1; }
+  .msg.system { align-self:center; background:#222733; color:var(--muted); font-size:12px; }
+  .msg .err { color:var(--bad); }
+  .msg.match-wrap { max-width:96%; padding:0; background:transparent; }
+  .typing { color:var(--muted); font-size:12px; padding:4px 2px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; padding:8px 18px 0; }
+  .chip { background:#222733; border:1px solid var(--line); color:#b9bfcc; border-radius:999px;
+          padding:5px 10px; font-size:11.5px; cursor:pointer; }
+  .chip:hover { color:var(--text); border-color:#3a4152; }
+  .chat-input { display:flex; gap:8px; padding:12px 18px 18px; align-items:flex-end; }
+  .chat-input textarea { flex:1; resize:none; background:#11141a; color:var(--text);
+                         border:1px solid var(--line); border-radius:9px; padding:9px 11px;
+                         font-size:13px; font-family:inherit; outline:none; }
+  .chat-input textarea:focus { border-color:var(--accent); }
+  .match-card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+                padding:13px 15px; margin-top:6px; }
+  .match-card .mc-head { display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .match-card .mc-title { font-weight:700; font-size:13px; }
+  .match-card .mc-prob { color:var(--muted); font-size:11.5px; text-align:right; }
+  .match-card .mc-team { margin-top:7px; }
+  .match-card .mc-reason { margin-top:9px; color:var(--muted); font-size:11.5px; line-height:1.6; }
+  .match-card .mc-actions { margin-top:9px; display:flex; gap:8px; }
+  .adopted-banner { color:var(--accent); font-size:12px; margin-bottom:8px; }
+
   @media (max-width:640px) {
     body { padding:0 14px 60px; }
     .bar { margin:18px -14px 0; padding:12px 14px; flex-wrap:wrap; }
+    .drawer { width:100%; }
   }
 </style>
 </head>
 <body>
 <header>
   <h1>Dota 2 对黑数据统计</h1>
-  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-23 12:55</div>
+  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-23 13:34</div>
 </header>
 
 <nav class="tabs">
@@ -124,6 +169,11 @@
   <h2 style="margin-top:26px">2. 结果</h2>
   <div id="results"><div class="empty">默认已全选，请反选到 10 人后点击下方 Roll。</div></div>
 
+  <div id="aiAction" class="ai-action">
+    <button class="primary" id="aiOpen">交互式匹配改进</button>
+    <span class="ai-hint" id="aiHint"></span>
+  </div>
+
   <div class="bar">
     <div class="count">已选 <b id="cnt">0</b> / 10</div>
     <button class="ghost" id="clear">清空</button>
@@ -131,6 +181,28 @@
     <button class="primary" id="roll" disabled>Roll</button>
   </div>
 </section>
+
+<div id="aiOverlay" class="overlay" onclick="closeAI()"></div>
+<aside id="aiDrawer" class="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <div>
+      <div class="drawer-title">AI 匹配助手</div>
+      <div class="drawer-sub">只会调整当前 10 人 · 由 DeepSeek 驱动</div>
+    </div>
+    <button class="ghost" onclick="closeAI()">关闭</button>
+  </div>
+  <div class="chat" id="aiMessages"></div>
+  <div class="chips">
+    <button class="chip" data-prompt="把现在这三套里最平衡的那套再优化一下，给出更合理的分队。">更平衡</button>
+    <button class="chip" data-prompt="避免综合分前两名在同一队，重新给一套方案。">避免双强同队</button>
+    <button class="chip" data-prompt="解释一下当前三套方案的优缺点。">解释当前方案</button>
+    <button class="chip" data-prompt="重新给 3 套不同的阵容。">重新给 3 套</button>
+  </div>
+  <div class="chat-input">
+    <textarea id="aiInput" rows="2" placeholder="例如：让两边核心数更均衡，或者把某人换到另一队…"></textarea>
+    <button class="primary" id="aiSend">发送</button>
+  </div>
+</aside>
 
 <section id="pane-rules" class="pane">
   <div class="rules-box">
@@ -187,7 +259,15 @@
 <script>
 const PLAYERS = [{"name": "木小可", "rating": 1064.4, "elo": 1058.3, "perf": 1073.6, "role": "酱油", "provisional": false, "games": 8, "wins": 6, "losses": 2, "winRate": 75.0, "coreRate": "25%", "rankAll": 6.5, "rankTeam": 3.88, "kda": 3.93, "kd": "4.8/5.6/17.4", "gpm": 351.5, "xpm": 561.1, "nwK": 12.7, "dmgK": 14.3, "dmgTakenK": 19.3, "dmgGold": 1.19, "takenGold": 1.56, "mmr": "-", "mmrNum": null, "heroes": "莱恩(1), 谜团(1), 昆卡(1)"}, {"name": "WW", "rating": 1047.1, "elo": 1037.0, "perf": 1062.3, "role": "酱油", "provisional": false, "games": 6, "wins": 4, "losses": 2, "winRate": 66.7, "coreRate": "33%", "rankAll": 6.67, "rankTeam": 3.67, "kda": 3.53, "kd": "4.8/6.3/17.5", "gpm": 364.3, "xpm": 560.3, "nwK": 12.7, "dmgK": 16.9, "dmgTakenK": 18.8, "dmgGold": 1.43, "takenGold": 1.71, "mmr": "-", "mmrNum": null, "heroes": "复仇之魂(1), 莱恩(1), 狙击手(1)"}, {"name": "不明AOE", "rating": 992.1, "elo": 1017.7, "perf": 953.7, "role": "核心", "provisional": false, "games": 3, "wins": 2, "losses": 1, "winRate": 66.7, "coreRate": "100%", "rankAll": 5.0, "rankTeam": 2.33, "kda": 2.48, "kd": "5.7/8.3/15.0", "gpm": 436.0, "xpm": 616.7, "nwK": 15.3, "dmgK": 24.7, "dmgTakenK": 20.6, "dmgGold": 1.25, "takenGold": 1.32, "mmr": "-", "mmrNum": null, "heroes": "不朽尸王(1), 主宰(1), 幽鬼(1)"}, {"name": "假赛王，拱手让冠军", "rating": 1028.1, "elo": 1025.4, "perf": 1032.0, "role": "核心", "provisional": false, "games": 8, "wins": 5, "losses": 3, "winRate": 62.5, "coreRate": "88%", "rankAll": 3.38, "rankTeam": 2.12, "kda": 4.3, "kd": "12.1/5.5/11.5", "gpm": 623.4, "xpm": 879.1, "nwK": 22.8, "dmgK": 34.4, "dmgTakenK": 26.5, "dmgGold": 1.5, "takenGold": 1.22, "mmr": "-", "mmrNum": null, "heroes": "斯温(2), 潮汐猎人(1), 冥魂大帝(1)"}, {"name": "young zhu", "rating": 1023.6, "elo": 1025.4, "perf": 1020.9, "role": "核心", "provisional": false, "games": 8, "wins": 5, "losses": 3, "winRate": 62.5, "coreRate": "100%", "rankAll": 2.88, "rankTeam": 1.75, "kda": 4.19, "kd": "9.6/5.4/12.9", "gpm": 535.5, "xpm": 770.8, "nwK": 18.6, "dmgK": 31.3, "dmgTakenK": 25.9, "dmgGold": 1.62, "takenGold": 1.41, "mmr": "-", "mmrNum": null, "heroes": "殁境神蚀者(1), 齐天大圣(1), 天怒法师(1)"}, {"name": "龙鸣", "rating": 999.8, "elo": 1016.8, "perf": 974.3, "role": "核心", "provisional": false, "games": 7, "wins": 4, "losses": 3, "winRate": 57.1, "coreRate": "57%", "rankAll": 5.43, "rankTeam": 3.14, "kda": 3.42, "kd": "5.0/6.9/18.4", "gpm": 413.1, "xpm": 614.9, "nwK": 15.0, "dmgK": 23.7, "dmgTakenK": 22.0, "dmgGold": 1.59, "takenGold": 1.76, "mmr": "-", "mmrNum": null, "heroes": "沉默术士(1), 幻影刺客(1), 卓尔游侠(1)"}, {"name": "我才是乃龙", "rating": 1006.6, "elo": 998.9, "perf": 1018.2, "role": "核心", "provisional": false, "games": 2, "wins": 1, "losses": 1, "winRate": 50.0, "coreRate": "100%", "rankAll": 5.0, "rankTeam": 2.5, "kda": 3.38, "kd": "11.5/8.0/15.5", "gpm": 538.0, "xpm": 704.5, "nwK": 19.7, "dmgK": 47.3, "dmgTakenK": 27.1, "dmgGold": 2.47, "takenGold": 1.88, "mmr": "-", "mmrNum": null, "heroes": "莉娜(1), 斧王(1)"}, {"name": "西恩DoTA亡", "rating": 1004.9, "elo": 987.0, "perf": 1031.8, "role": "核心", "provisional": false, "games": 7, "wins": 3, "losses": 4, "winRate": 42.9, "coreRate": "100%", "rankAll": 2.86, "rankTeam": 2.0, "kda": 5.55, "kd": "9.1/4.1/13.9", "gpm": 537.3, "xpm": 715.1, "nwK": 19.0, "dmgK": 21.9, "dmgTakenK": 25.5, "dmgGold": 1.12, "takenGold": 1.27, "mmr": "-", "mmrNum": null, "heroes": "自然先知(1), 虚无之灵(1), 莉娜(1)"}, {"name": "大超哥", "rating": 990.8, "elo": 974.6, "perf": 1015.1, "role": "核心", "provisional": false, "games": 8, "wins": 3, "losses": 5, "winRate": 37.5, "coreRate": "100%", "rankAll": 3.0, "rankTeam": 1.38, "kda": 3.73, "kd": "12.9/6.4/10.9", "gpm": 607.6, "xpm": 809.2, "nwK": 21.2, "dmgK": 38.0, "dmgTakenK": 25.2, "dmgGold": 1.64, "takenGold": 1.28, "mmr": "-", "mmrNum": null, "heroes": "幻影刺客(1), 拉席克(1), 玛尔斯(1)"}, {"name": "奶龙", "rating": 1005.0, "elo": 971.6, "perf": 1055.2, "role": "酱油", "provisional": false, "games": 6, "wins": 2, "losses": 4, "winRate": 33.3, "coreRate": "33%", "rankAll": 8.67, "rankTeam": 4.33, "kda": 2.98, "kd": "4.0/8.3/20.8", "gpm": 328.2, "xpm": 501.7, "nwK": 10.6, "dmgK": 19.8, "dmgTakenK": 22.8, "dmgGold": 1.89, "takenGold": 2.11, "mmr": "-", "mmrNum": null, "heroes": "寒冬飞龙(1), 撼地者(1), 暗影萨满(1)"}, {"name": "猪猪侠", "rating": 980.7, "elo": 980.4, "perf": 981.1, "role": "酱油", "provisional": false, "games": 3, "wins": 1, "losses": 2, "winRate": 33.3, "coreRate": "33%", "rankAll": 8.33, "rankTeam": 4.33, "kda": 1.54, "kd": "2.3/11.7/15.7", "gpm": 294.7, "xpm": 430.3, "nwK": 10.7, "dmgK": 20.1, "dmgTakenK": 29.3, "dmgGold": 1.77, "takenGold": 2.68, "mmr": "-", "mmrNum": null, "heroes": "术士(1), 杰奇洛(1), 钢背兽(1)"}, {"name": "肛客", "rating": 959.7, "elo": 965.2, "perf": 951.4, "role": "酱油", "provisional": false, "games": 6, "wins": 2, "losses": 4, "winRate": 33.3, "coreRate": "33%", "rankAll": 7.5, "rankTeam": 3.83, "kda": 1.55, "kd": "2.5/9.7/12.5", "gpm": 340.0, "xpm": 479.3, "nwK": 10.6, "dmgK": 12.6, "dmgTakenK": 27.5, "dmgGold": 1.23, "takenGold": 2.64, "mmr": "-", "mmrNum": null, "heroes": "伐木机(1), 暗夜魔王(1), 钢背兽(1)"}, {"name": "不会不学不练", "rating": 947.2, "elo": 941.7, "perf": 955.3, "role": "酱油", "provisional": false, "games": 8, "wins": 2, "losses": 6, "winRate": 25.0, "coreRate": "0%", "rankAll": 8.62, "rankTeam": 4.38, "kda": 1.77, "kd": "2.8/9.8/14.5", "gpm": 292.6, "xpm": 446.9, "nwK": 10.0, "dmgK": 12.6, "dmgTakenK": 21.7, "dmgGold": 1.36, "takenGold": 2.17, "mmr": "-", "mmrNum": null, "heroes": "巫妖(1), 水晶室女(1), 司夜刺客(1)"}];
 const MATCH_COUNT = 8;
-const state = { selected: new Set(PLAYERS.map(p => p.name)) };
+const AI_ENDPOINT = "https://unhappy-grouse-d3gsbs7inb2cb10d6.service.tcloudbase.com/api/roll-ai";
+const state = {
+  selected: new Set(PLAYERS.map(p => p.name)),
+  results: [],
+  resultsHtml: "",
+  rollPool: [],
+  adopted: null,
+  ai: { messages: [], busy: false, open: false, cards: {} },
+};
 const $ = (id) => document.getElementById(id);
 
 /* ---------- Tabs ---------- */
@@ -285,6 +365,14 @@ function escJs(s) { return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'")
 function toggle(name) {
   if (state.selected.has(name)) state.selected.delete(name);
   else if (state.selected.size < 10) state.selected.add(name);
+  if (state.results.length) {
+    state.results = [];
+    state.resultsHtml = "";
+    state.adopted = null;
+    resetAI();
+    $("results").innerHTML = '<div class="empty">名单已变更，请重新 Roll。</div>';
+    updateAIAction();
+  }
   renderPlayers();
 }
 function updateBar() {
@@ -364,12 +452,21 @@ function roll() {
   }
   if (!valid.length) {
     $("results").innerHTML = `<div class="empty">没有满足最低规则的方案。当前名单是 ${cores} 核 + ${10 - cores} 辅，请调整名单或检查数据。</div>`;
+    state.results = [];
+    updateAIAction();
     return;
   }
 
   valid.sort((x, y) => y.score - x.score || x.diff - y.diff);
   const pool = valid.slice(0, Math.min(10, valid.length));
   const picks = shuffle([...pool]).slice(0, 3);
+
+  state.results = picks;
+  state.rollPool = sel.map(p => p.name);
+  state.rollTop2 = [...top2];
+  state.rollLevel = chosenLevel;
+  state.adopted = null;
+  resetAI();
 
   const probs = pool.map(x => x.pa);
   const basis = `<div class="why" style="margin-bottom:12px">
@@ -380,6 +477,8 @@ function roll() {
   </div>`;
 
   $("results").innerHTML = basis + picks.map((r, i) => card(r, i + 1, top2, chosenLevel)).join("");
+  state.resultsHtml = $("results").innerHTML;
+  updateAIAction();
 }
 function memberHtml(p) {
   return `<span class="member"><b>${esc(p.name)}</b><span>${Math.round(p.rating)}</span></span>`;
@@ -421,7 +520,239 @@ function card(r, idx, top2, lv) {
   </div>`;
 }
 
+/* ---------- AI 匹配助手 ---------- */
+function normName(s) {
+  return String(s).replace(/[\uE000-\uF8FF\s]/g, "").toLowerCase();
+}
+function playerByName(raw) {
+  const key = normName(raw);
+  return PLAYERS.find(p => normName(p.name) === key) || null;
+}
+function aiContext() {
+  const pool = state.rollPool.map(n => PLAYERS.find(p => p.name === n)).filter(Boolean);
+  return {
+    players: pool.map(p => ({
+      name: p.name, rating: p.rating, role: p.role,
+      gpm: p.gpm, xpm: p.xpm, kda: p.kda, mmr: p.mmr
+    })),
+    lineups: state.results.map(r => ({
+      team_a: r.a.map(p => p.name),
+      team_b: r.b.map(p => p.name),
+      pa: r.pa,
+      score: r.score
+    })),
+    adopted: state.adopted ? {
+      team_a: state.adopted.a.map(p => p.name),
+      team_b: state.adopted.b.map(p => p.name)
+    } : null
+  };
+}
+function updateAIAction() {
+  const box = $("aiAction");
+  if (!box) return;
+  if (!state.results.length) { box.style.display = "none"; return; }
+  box.style.display = "flex";
+  const btn = $("aiOpen");
+  if (!AI_ENDPOINT) {
+    btn.disabled = true;
+    $("aiHint").textContent = "AI 助手尚未部署，请先运行一键部署 AI";
+  } else {
+    btn.disabled = false;
+    $("aiHint").textContent = "在已 roll 的结果上和 AI 讨论、微调";
+  }
+}
+function resetAI() {
+  state.ai.messages = [];
+  state.ai.cards = {};
+  state.ai.busy = false;
+  const box = $("aiMessages");
+  if (box) box.innerHTML = "";
+  closeAI();
+}
+function openAI() {
+  if (!AI_ENDPOINT) { alert("AI 助手尚未部署"); return; }
+  state.ai.open = true;
+  $("aiOverlay").classList.add("on");
+  $("aiDrawer").classList.add("on");
+  $("aiDrawer").setAttribute("aria-hidden", "false");
+  if (!state.ai.messages.length) seedAI();
+  setTimeout(() => $("aiInput").focus(), 200);
+}
+function closeAI() {
+  state.ai.open = false;
+  const ov = $("aiOverlay"), dr = $("aiDrawer");
+  if (ov) ov.classList.remove("on");
+  if (dr) { dr.classList.remove("on"); dr.setAttribute("aria-hidden", "true"); }
+}
+function addMsg(role, html, extra) {
+  const d = document.createElement("div");
+  d.className = "msg " + role + (extra ? " " + extra : "");
+  d.innerHTML = html;
+  $("aiMessages").appendChild(d);
+  $("aiMessages").scrollTop = $("aiMessages").scrollHeight;
+  return d;
+}
+function seedAI() {
+  const summary = state.results.map((r, i) =>
+    `方案${i + 1}：平衡分 ${r.score.toFixed(1)}，预测 ${(r.pa * 100).toFixed(1)}%`
+  ).join("；");
+  addMsg("assistant",
+    `已加载当前 10 人和 3 套方案（${summary}）。想怎么调整？可以直接说“更平衡”“避免某某同队”等。`);
+}
+function setAIBusy(busy) {
+  state.ai.busy = busy;
+  $("aiSend").disabled = busy;
+  $("aiInput").disabled = busy;
+  let tip = $("aiTyping");
+  if (busy && !tip) {
+    tip = document.createElement("div");
+    tip.id = "aiTyping";
+    tip.className = "typing";
+    tip.textContent = "AI 正在思考…";
+    $("aiMessages").appendChild(tip);
+    $("aiMessages").scrollTop = $("aiMessages").scrollHeight;
+  } else if (!busy && tip) {
+    tip.remove();
+  }
+}
+async function sendAI(text) {
+  text = (text || "").trim();
+  if (!text || state.ai.busy || !AI_ENDPOINT) return;
+  addMsg("user", esc(text).replace(/\n/g, "<br>"));
+  state.ai.messages.push({ role: "user", content: text });
+  $("aiInput").value = "";
+  await runAILoop();
+}
+async function runAILoop() {
+  setAIBusy(true);
+  try {
+    let rounds = 0;
+    while (rounds++ < 3) {
+      const res = await fetch(AI_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: state.ai.messages, context: aiContext() })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        addMsg("assistant", `<span class="err">${esc(data.error || ("请求失败 " + res.status))}</span>`);
+        break;
+      }
+      const content = data.content || [];
+      const blocks = content.filter(b => b.type === "text" || b.type === "tool_use");
+      for (const b of content) {
+        if (b.type === "text" && b.text && b.text.trim()) {
+          addMsg("assistant", esc(b.text).replace(/\n/g, "<br>"));
+        }
+      }
+      if (blocks.length) state.ai.messages.push({ role: "assistant", content: blocks });
+
+      const tools = blocks.filter(b => b.type === "tool_use" && b.name === "display_match");
+      if (!tools.length) break;
+
+      const results = [];
+      for (const t of tools) {
+        const out = handleDisplayMatch(t);
+        results.push({
+          type: "tool_result",
+          tool_use_id: t.id,
+          content: out.ok ? "已展示阵容卡片。" : ("错误：" + out.error)
+        });
+      }
+      state.ai.messages.push({ role: "user", content: results });
+    }
+  } catch (e) {
+    addMsg("assistant", '<span class="err">网络错误，请稍后重试。</span>');
+  } finally {
+    setAIBusy(false);
+  }
+}
+function handleDisplayMatch(tool) {
+  const inp = tool.input || {};
+  const aNames = Array.isArray(inp.team_a) ? inp.team_a : [];
+  const bNames = Array.isArray(inp.team_b) ? inp.team_b : [];
+  if (aNames.length !== 5 || bNames.length !== 5) {
+    return { ok: false, error: "每队必须正好 5 人" };
+  }
+  const a = [], b = [];
+  for (const n of aNames) {
+    const p = playerByName(n);
+    if (!p) return { ok: false, error: `未知玩家：${n}` };
+    a.push(p);
+  }
+  for (const n of bNames) {
+    const p = playerByName(n);
+    if (!p) return { ok: false, error: `未知玩家：${n}` };
+    b.push(p);
+  }
+  const all = [...a, ...b];
+  if (new Set(all.map(p => p.name)).size !== 10) {
+    return { ok: false, error: "10 个玩家必须互不重复" };
+  }
+  const pool = new Set(state.rollPool);
+  if (all.some(p => !pool.has(p.name))) {
+    return { ok: false, error: "只能使用当前已选的 10 人" };
+  }
+  const ra = a.reduce((s, p) => s + p.rating, 0) / 5;
+  const rb = b.reduce((s, p) => s + p.rating, 0) / 5;
+  const pa = expected(ra, rb);
+  const ca = a.filter(p => p.role === "核心").length;
+  const cb = b.filter(p => p.role === "核心").length;
+  const r = { a, b, ra, rb, pa, ca, cb, diff: Math.abs(ra - rb),
+    score: 100 * (1 - 2 * Math.abs(pa - 0.5)) };
+  const id = "m" + Date.now() + "_" + Object.keys(state.ai.cards).length;
+  state.ai.cards[id] = r;
+  const top2 = new Set(state.rollTop2 || []);
+  const lv = state.rollLevel || { diff: 10, lo: .45, hi: .55 };
+  addMsg("assistant", matchCardHtml(r, id, inp.reason || "", top2, lv), "match-wrap");
+  return { ok: true };
+}
+function matchCardHtml(r, id, reason, top2, lv) {
+  return `<div class="match-card">
+    <div class="mc-head">
+      <div class="mc-title">AI 建议阵容</div>
+      <div class="mc-prob">预测 ${(r.pa * 100).toFixed(1)}% / ${((1 - r.pa) * 100).toFixed(1)}%<br>
+        平衡分 ${r.score.toFixed(1)} · 均分 ${r.ra.toFixed(1)} vs ${r.rb.toFixed(1)}</div>
+    </div>
+    <div class="mc-team">
+      <div class="team-label">队伍 A · 核心 ${r.ca} / 酱油 ${5 - r.ca}</div>
+      <div class="members">${[...r.a].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
+    </div>
+    <div class="mc-team">
+      <div class="team-label">队伍 B · 核心 ${r.cb} / 酱油 ${5 - r.cb}</div>
+      <div class="members">${[...r.b].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
+    </div>
+    <div class="audit">${auditRows(r, top2, lv)}</div>
+    ${reason ? `<div class="mc-reason">${esc(reason)}</div>` : ""}
+    <div class="mc-actions">
+      <button class="primary" onclick="adoptLineup('${id}')">采用此阵容</button>
+    </div>
+  </div>`;
+}
+function adoptLineup(id) {
+  const r = state.ai.cards[id];
+  if (!r) return;
+  state.adopted = r;
+  const top2 = new Set(state.rollTop2 || []);
+  const lv = state.rollLevel || { diff: 10, lo: .45, hi: .55 };
+  $("results").innerHTML =
+    '<div class="adopted-banner">已采用 AI 建议阵容</div>' +
+    card(r, "AI", top2, lv) + state.resultsHtml;
+  addMsg("assistant", "已采用这套阵容，主结果区已更新。");
+}
+
 $("roll").onclick = roll;
+$("aiOpen").onclick = openAI;
+$("aiSend").onclick = () => sendAI($("aiInput").value);
+$("aiInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendAI($("aiInput").value);
+  }
+});
+document.querySelectorAll(".chip").forEach(c => {
+  c.onclick = () => sendAI(c.dataset.prompt);
+});
 renderStats();
 renderPlayers();
 

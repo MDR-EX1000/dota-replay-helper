@@ -1,0 +1,16 @@
+{
+  "envId": "your-cloudbase-env-id",
+  "functionRoot": "./cloudfunctions",
+  "functions": [
+    {
+      "name": "roll-ai",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 30,
+      "memorySize": 256,
+      "envVariables": {
+        "DEEPSEEK_API_KEY": "REPLACE_WITH_KEY"
+      }
+    }
+  ]
+}

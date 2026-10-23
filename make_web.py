@@ -153,9 +153,54 @@ TEMPLATE = r"""<!DOCTYPE html>
   .rules-box table { font-size:12.5px; }
   .rules-box td, .rules-box th { text-align:left; }
   .footer { margin-top:28px; color:#6f7585; font-size:11.5px; }
+
+  /* AI 匹配助手 */
+  .ai-action { display:none; align-items:center; gap:12px; margin:18px 0 8px; flex-wrap:wrap; }
+  .ai-hint { color:var(--muted); font-size:12px; }
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); opacity:0; pointer-events:none;
+             transition:opacity .2s; z-index:90; }
+  .overlay.on { opacity:1; pointer-events:auto; }
+  .drawer { position:fixed; top:0; right:0; height:100%; width:430px; max-width:100%;
+            background:#171a21; border-left:1px solid var(--line); z-index:100;
+            display:flex; flex-direction:column; transform:translateX(100%);
+            transition:transform .22s ease; }
+  .drawer.on { transform:translateX(0); }
+  .drawer-head { display:flex; justify-content:space-between; align-items:center;
+                 padding:16px 18px; border-bottom:1px solid var(--line); }
+  .drawer-title { font-weight:700; font-size:15px; }
+  .drawer-sub { color:var(--muted); font-size:11.5px; margin-top:3px; }
+  .chat { flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+  .msg { max-width:88%; padding:9px 12px; border-radius:10px; font-size:13px; line-height:1.65;
+         white-space:normal; word-break:break-word; }
+  .msg.user { align-self:flex-end; background:#233042; color:#e6e8ec; }
+  .msg.assistant { align-self:flex-start; background:#1f2430; color:#cfd5e1; }
+  .msg.system { align-self:center; background:#222733; color:var(--muted); font-size:12px; }
+  .msg .err { color:var(--bad); }
+  .msg.match-wrap { max-width:96%; padding:0; background:transparent; }
+  .typing { color:var(--muted); font-size:12px; padding:4px 2px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; padding:8px 18px 0; }
+  .chip { background:#222733; border:1px solid var(--line); color:#b9bfcc; border-radius:999px;
+          padding:5px 10px; font-size:11.5px; cursor:pointer; }
+  .chip:hover { color:var(--text); border-color:#3a4152; }
+  .chat-input { display:flex; gap:8px; padding:12px 18px 18px; align-items:flex-end; }
+  .chat-input textarea { flex:1; resize:none; background:#11141a; color:var(--text);
+                         border:1px solid var(--line); border-radius:9px; padding:9px 11px;
+                         font-size:13px; font-family:inherit; outline:none; }
+  .chat-input textarea:focus { border-color:var(--accent); }
+  .match-card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+                padding:13px 15px; margin-top:6px; }
+  .match-card .mc-head { display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .match-card .mc-title { font-weight:700; font-size:13px; }
+  .match-card .mc-prob { color:var(--muted); font-size:11.5px; text-align:right; }
+  .match-card .mc-team { margin-top:7px; }
+  .match-card .mc-reason { margin-top:9px; color:var(--muted); font-size:11.5px; line-height:1.6; }
+  .match-card .mc-actions { margin-top:9px; display:flex; gap:8px; }
+  .adopted-banner { color:var(--accent); font-size:12px; margin-bottom:8px; }
+
   @media (max-width:640px) {
     body { padding:0 14px 60px; }
     .bar { margin:18px -14px 0; padding:12px 14px; flex-wrap:wrap; }
+    .drawer { width:100%; }
   }
 </style>
 </head>
@@ -188,6 +233,11 @@ TEMPLATE = r"""<!DOCTYPE html>
   <h2 style="margin-top:26px">2. 结果</h2>
   <div id="results"><div class="empty">默认已全选，请反选到 10 人后点击下方 Roll。</div></div>
 
+  <div id="aiAction" class="ai-action">
+    <button class="primary" id="aiOpen">交互式匹配改进</button>
+    <span class="ai-hint" id="aiHint"></span>
+  </div>
+
   <div class="bar">
     <div class="count">已选 <b id="cnt">0</b> / 10</div>
     <button class="ghost" id="clear">清空</button>
@@ -195,6 +245,28 @@ TEMPLATE = r"""<!DOCTYPE html>
     <button class="primary" id="roll" disabled>Roll</button>
   </div>
 </section>
+
+<div id="aiOverlay" class="overlay" onclick="closeAI()"></div>
+<aside id="aiDrawer" class="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <div>
+      <div class="drawer-title">AI 匹配助手</div>
+      <div class="drawer-sub">只会调整当前 10 人 · 由 DeepSeek 驱动</div>
+    </div>
+    <button class="ghost" onclick="closeAI()">关闭</button>
+  </div>
+  <div class="chat" id="aiMessages"></div>
+  <div class="chips">
+    <button class="chip" data-prompt="把现在这三套里最平衡的那套再优化一下，给出更合理的分队。">更平衡</button>
+    <button class="chip" data-prompt="避免综合分前两名在同一队，重新给一套方案。">避免双强同队</button>
+    <button class="chip" data-prompt="解释一下当前三套方案的优缺点。">解释当前方案</button>
+    <button class="chip" data-prompt="重新给 3 套不同的阵容。">重新给 3 套</button>
+  </div>
+  <div class="chat-input">
+    <textarea id="aiInput" rows="2" placeholder="例如：让两边核心数更均衡，或者把某人换到另一队…"></textarea>
+    <button class="primary" id="aiSend">发送</button>
+  </div>
+</aside>
 
 <section id="pane-rules" class="pane">
   <div class="rules-box">
@@ -251,7 +323,15 @@ TEMPLATE = r"""<!DOCTYPE html>
 <script>
 const PLAYERS = __DATA__;
 const MATCH_COUNT = __MATCHES__;
-const state = { selected: new Set(PLAYERS.map(p => p.name)) };
+const AI_ENDPOINT = __AI_ENDPOINT__;
+const state = {
+  selected: new Set(PLAYERS.map(p => p.name)),
+  results: [],
+  resultsHtml: "",
+  rollPool: [],
+  adopted: null,
+  ai: { messages: [], busy: false, open: false, cards: {} },
+};
 const $ = (id) => document.getElementById(id);
 
 /* ---------- Tabs ---------- */
@@ -349,6 +429,14 @@ function escJs(s) { return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'")
 function toggle(name) {
   if (state.selected.has(name)) state.selected.delete(name);
   else if (state.selected.size < 10) state.selected.add(name);
+  if (state.results.length) {
+    state.results = [];
+    state.resultsHtml = "";
+    state.adopted = null;
+    resetAI();
+    $("results").innerHTML = '<div class="empty">名单已变更，请重新 Roll。</div>';
+    updateAIAction();
+  }
   renderPlayers();
 }
 function updateBar() {
@@ -428,12 +516,21 @@ function roll() {
   }
   if (!valid.length) {
     $("results").innerHTML = `<div class="empty">没有满足最低规则的方案。当前名单是 ${cores} 核 + ${10 - cores} 辅，请调整名单或检查数据。</div>`;
+    state.results = [];
+    updateAIAction();
     return;
   }
 
   valid.sort((x, y) => y.score - x.score || x.diff - y.diff);
   const pool = valid.slice(0, Math.min(10, valid.length));
   const picks = shuffle([...pool]).slice(0, 3);
+
+  state.results = picks;
+  state.rollPool = sel.map(p => p.name);
+  state.rollTop2 = [...top2];
+  state.rollLevel = chosenLevel;
+  state.adopted = null;
+  resetAI();
 
   const probs = pool.map(x => x.pa);
   const basis = `<div class="why" style="margin-bottom:12px">
@@ -444,6 +541,8 @@ function roll() {
   </div>`;
 
   $("results").innerHTML = basis + picks.map((r, i) => card(r, i + 1, top2, chosenLevel)).join("");
+  state.resultsHtml = $("results").innerHTML;
+  updateAIAction();
 }
 function memberHtml(p) {
   return `<span class="member"><b>${esc(p.name)}</b><span>${Math.round(p.rating)}</span></span>`;
@@ -485,7 +584,239 @@ function card(r, idx, top2, lv) {
   </div>`;
 }
 
+/* ---------- AI 匹配助手 ---------- */
+function normName(s) {
+  return String(s).replace(/[\uE000-\uF8FF\s]/g, "").toLowerCase();
+}
+function playerByName(raw) {
+  const key = normName(raw);
+  return PLAYERS.find(p => normName(p.name) === key) || null;
+}
+function aiContext() {
+  const pool = state.rollPool.map(n => PLAYERS.find(p => p.name === n)).filter(Boolean);
+  return {
+    players: pool.map(p => ({
+      name: p.name, rating: p.rating, role: p.role,
+      gpm: p.gpm, xpm: p.xpm, kda: p.kda, mmr: p.mmr
+    })),
+    lineups: state.results.map(r => ({
+      team_a: r.a.map(p => p.name),
+      team_b: r.b.map(p => p.name),
+      pa: r.pa,
+      score: r.score
+    })),
+    adopted: state.adopted ? {
+      team_a: state.adopted.a.map(p => p.name),
+      team_b: state.adopted.b.map(p => p.name)
+    } : null
+  };
+}
+function updateAIAction() {
+  const box = $("aiAction");
+  if (!box) return;
+  if (!state.results.length) { box.style.display = "none"; return; }
+  box.style.display = "flex";
+  const btn = $("aiOpen");
+  if (!AI_ENDPOINT) {
+    btn.disabled = true;
+    $("aiHint").textContent = "AI 助手尚未部署，请先运行一键部署 AI";
+  } else {
+    btn.disabled = false;
+    $("aiHint").textContent = "在已 roll 的结果上和 AI 讨论、微调";
+  }
+}
+function resetAI() {
+  state.ai.messages = [];
+  state.ai.cards = {};
+  state.ai.busy = false;
+  const box = $("aiMessages");
+  if (box) box.innerHTML = "";
+  closeAI();
+}
+function openAI() {
+  if (!AI_ENDPOINT) { alert("AI 助手尚未部署"); return; }
+  state.ai.open = true;
+  $("aiOverlay").classList.add("on");
+  $("aiDrawer").classList.add("on");
+  $("aiDrawer").setAttribute("aria-hidden", "false");
+  if (!state.ai.messages.length) seedAI();
+  setTimeout(() => $("aiInput").focus(), 200);
+}
+function closeAI() {
+  state.ai.open = false;
+  const ov = $("aiOverlay"), dr = $("aiDrawer");
+  if (ov) ov.classList.remove("on");
+  if (dr) { dr.classList.remove("on"); dr.setAttribute("aria-hidden", "true"); }
+}
+function addMsg(role, html, extra) {
+  const d = document.createElement("div");
+  d.className = "msg " + role + (extra ? " " + extra : "");
+  d.innerHTML = html;
+  $("aiMessages").appendChild(d);
+  $("aiMessages").scrollTop = $("aiMessages").scrollHeight;
+  return d;
+}
+function seedAI() {
+  const summary = state.results.map((r, i) =>
+    `方案${i + 1}：平衡分 ${r.score.toFixed(1)}，预测 ${(r.pa * 100).toFixed(1)}%`
+  ).join("；");
+  addMsg("assistant",
+    `已加载当前 10 人和 3 套方案（${summary}）。想怎么调整？可以直接说“更平衡”“避免某某同队”等。`);
+}
+function setAIBusy(busy) {
+  state.ai.busy = busy;
+  $("aiSend").disabled = busy;
+  $("aiInput").disabled = busy;
+  let tip = $("aiTyping");
+  if (busy && !tip) {
+    tip = document.createElement("div");
+    tip.id = "aiTyping";
+    tip.className = "typing";
+    tip.textContent = "AI 正在思考…";
+    $("aiMessages").appendChild(tip);
+    $("aiMessages").scrollTop = $("aiMessages").scrollHeight;
+  } else if (!busy && tip) {
+    tip.remove();
+  }
+}
+async function sendAI(text) {
+  text = (text || "").trim();
+  if (!text || state.ai.busy || !AI_ENDPOINT) return;
+  addMsg("user", esc(text).replace(/\n/g, "<br>"));
+  state.ai.messages.push({ role: "user", content: text });
+  $("aiInput").value = "";
+  await runAILoop();
+}
+async function runAILoop() {
+  setAIBusy(true);
+  try {
+    let rounds = 0;
+    while (rounds++ < 3) {
+      const res = await fetch(AI_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: state.ai.messages, context: aiContext() })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        addMsg("assistant", `<span class="err">${esc(data.error || ("请求失败 " + res.status))}</span>`);
+        break;
+      }
+      const content = data.content || [];
+      const blocks = content.filter(b => b.type === "text" || b.type === "tool_use");
+      for (const b of content) {
+        if (b.type === "text" && b.text && b.text.trim()) {
+          addMsg("assistant", esc(b.text).replace(/\n/g, "<br>"));
+        }
+      }
+      if (blocks.length) state.ai.messages.push({ role: "assistant", content: blocks });
+
+      const tools = blocks.filter(b => b.type === "tool_use" && b.name === "display_match");
+      if (!tools.length) break;
+
+      const results = [];
+      for (const t of tools) {
+        const out = handleDisplayMatch(t);
+        results.push({
+          type: "tool_result",
+          tool_use_id: t.id,
+          content: out.ok ? "已展示阵容卡片。" : ("错误：" + out.error)
+        });
+      }
+      state.ai.messages.push({ role: "user", content: results });
+    }
+  } catch (e) {
+    addMsg("assistant", '<span class="err">网络错误，请稍后重试。</span>');
+  } finally {
+    setAIBusy(false);
+  }
+}
+function handleDisplayMatch(tool) {
+  const inp = tool.input || {};
+  const aNames = Array.isArray(inp.team_a) ? inp.team_a : [];
+  const bNames = Array.isArray(inp.team_b) ? inp.team_b : [];
+  if (aNames.length !== 5 || bNames.length !== 5) {
+    return { ok: false, error: "每队必须正好 5 人" };
+  }
+  const a = [], b = [];
+  for (const n of aNames) {
+    const p = playerByName(n);
+    if (!p) return { ok: false, error: `未知玩家：${n}` };
+    a.push(p);
+  }
+  for (const n of bNames) {
+    const p = playerByName(n);
+    if (!p) return { ok: false, error: `未知玩家：${n}` };
+    b.push(p);
+  }
+  const all = [...a, ...b];
+  if (new Set(all.map(p => p.name)).size !== 10) {
+    return { ok: false, error: "10 个玩家必须互不重复" };
+  }
+  const pool = new Set(state.rollPool);
+  if (all.some(p => !pool.has(p.name))) {
+    return { ok: false, error: "只能使用当前已选的 10 人" };
+  }
+  const ra = a.reduce((s, p) => s + p.rating, 0) / 5;
+  const rb = b.reduce((s, p) => s + p.rating, 0) / 5;
+  const pa = expected(ra, rb);
+  const ca = a.filter(p => p.role === "核心").length;
+  const cb = b.filter(p => p.role === "核心").length;
+  const r = { a, b, ra, rb, pa, ca, cb, diff: Math.abs(ra - rb),
+    score: 100 * (1 - 2 * Math.abs(pa - 0.5)) };
+  const id = "m" + Date.now() + "_" + Object.keys(state.ai.cards).length;
+  state.ai.cards[id] = r;
+  const top2 = new Set(state.rollTop2 || []);
+  const lv = state.rollLevel || { diff: 10, lo: .45, hi: .55 };
+  addMsg("assistant", matchCardHtml(r, id, inp.reason || "", top2, lv), "match-wrap");
+  return { ok: true };
+}
+function matchCardHtml(r, id, reason, top2, lv) {
+  return `<div class="match-card">
+    <div class="mc-head">
+      <div class="mc-title">AI 建议阵容</div>
+      <div class="mc-prob">预测 ${(r.pa * 100).toFixed(1)}% / ${((1 - r.pa) * 100).toFixed(1)}%<br>
+        平衡分 ${r.score.toFixed(1)} · 均分 ${r.ra.toFixed(1)} vs ${r.rb.toFixed(1)}</div>
+    </div>
+    <div class="mc-team">
+      <div class="team-label">队伍 A · 核心 ${r.ca} / 酱油 ${5 - r.ca}</div>
+      <div class="members">${[...r.a].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
+    </div>
+    <div class="mc-team">
+      <div class="team-label">队伍 B · 核心 ${r.cb} / 酱油 ${5 - r.cb}</div>
+      <div class="members">${[...r.b].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
+    </div>
+    <div class="audit">${auditRows(r, top2, lv)}</div>
+    ${reason ? `<div class="mc-reason">${esc(reason)}</div>` : ""}
+    <div class="mc-actions">
+      <button class="primary" onclick="adoptLineup('${id}')">采用此阵容</button>
+    </div>
+  </div>`;
+}
+function adoptLineup(id) {
+  const r = state.ai.cards[id];
+  if (!r) return;
+  state.adopted = r;
+  const top2 = new Set(state.rollTop2 || []);
+  const lv = state.rollLevel || { diff: 10, lo: .45, hi: .55 };
+  $("results").innerHTML =
+    '<div class="adopted-banner">已采用 AI 建议阵容</div>' +
+    card(r, "AI", top2, lv) + state.resultsHtml;
+  addMsg("assistant", "已采用这套阵容，主结果区已更新。");
+}
+
 $("roll").onclick = roll;
+$("aiOpen").onclick = openAI;
+$("aiSend").onclick = () => sendAI($("aiInput").value);
+$("aiInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendAI($("aiInput").value);
+  }
+});
+document.querySelectorAll(".chip").forEach(c => {
+  c.onclick = () => sendAI(c.dataset.prompt);
+});
 renderStats();
 renderPlayers();
 
@@ -506,10 +837,18 @@ if (new URLSearchParams(location.search).get("demo")) {
 
 def main():
     players, match_count = collect_players()
+    ai_endpoint = ""
+    try:
+        with open(os.path.join(REPLAY_ROOT, "cloudbase.json"), encoding="utf-8") as fp:
+            ai_endpoint = json.load(fp).get("ai_endpoint", "")
+    except (OSError, json.JSONDecodeError):
+        pass
+
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(players, ensure_ascii=False))
             .replace("__MATCHES__", str(match_count))
-            .replace("__TIME__", datetime.now().strftime("%Y-%m-%d %H:%M")))
+            .replace("__TIME__", datetime.now().strftime("%Y-%m-%d %H:%M"))
+            .replace("__AI_ENDPOINT__", json.dumps(ai_endpoint)))
     os.makedirs(DOCS_DIR, exist_ok=True)
     out = os.path.join(DOCS_DIR, "index.html")
     with open(out, "w", encoding="utf-8") as fp:

@@ -18,6 +18,10 @@ player_stats.html
 # 腾讯云 API 密钥（绝不提交）
 cloudbase.secret.json
 
+# 云函数本地配置（含 DeepSeek Key，绝不提交）
+cloudbaserc.json
+cloudfunctions/**/node_modules/
+
 # 根目录旧的生成网页（正式页面在 docs/）
 /index.html
 

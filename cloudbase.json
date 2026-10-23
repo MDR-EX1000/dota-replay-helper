@@ -1,4 +1,5 @@
 {
   "env_id": "unhappy-grouse-d3gsbs7inb2cb10d6",
-  "domain": "https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/"
+  "domain": "https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/",
+  "ai_endpoint": "https://unhappy-grouse-d3gsbs7inb2cb10d6.service.tcloudbase.com/api/roll-ai"
 }

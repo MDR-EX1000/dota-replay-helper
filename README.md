@@ -17,6 +17,11 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
                             │
                             ▼
                      腾讯云 CloudBase
+                            │
+              浏览器 AI 对话 → CloudBase 云函数 roll-ai
+                            │
+                            ▼
+                 DeepSeek（deepseek-flash）
 ```
 
 ## 目录
@@ -26,8 +31,11 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 ```
 replay/
 ├── stats.py / balance.py / roll.py / make_web.py
-├── deploy_tcb.py              # 腾讯云发布
-├── cloudbase.json             # 腾讯云环境 ID 与访问域名
+├── deploy_tcb.py              # 腾讯云静态发布
+├── deploy_ai.py               # 部署 AI 云函数
+├── cloudfunctions/roll-ai/    # DeepSeek 代理云函数
+├── cloudbaserc.example.json   # 云函数配置模板（真实配置不入库）
+├── cloudbase.json             # 环境 ID、访问域名、AI 端点
 ├── aliases.json               # 多账号合并（仅名字，不含 SteamID）
 ├── baselines.json             # 核心/酱油表现分基准
 ├── hero_names_zh.json         # 英雄英文 key → 中文名
@@ -38,7 +46,7 @@ replay/
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
 ├── player_stats.csv / .html   # 本地汇总表（git 忽略）
 ├── manta/                     # 上游解析库（git 忽略）
-└── 三个一键 bat
+└── 四个一键 bat
 ```
 
 | 路径 | 说明 |
@@ -48,7 +56,9 @@ replay/
 | `roll.py` | 规则化 roll（R1–R5），只在合格方案里随机 |
 | `make_web.py` | 生成三 Tab 网页到 `docs/index.html` |
 | `deploy_tcb.py` | 生成 → 上传到腾讯云 CloudBase 静态托管 |
-| `cloudbase.json` | 腾讯云环境 ID 与默认访问域名 |
+| `deploy_ai.py` | 部署 `roll-ai` 云函数，写入 AI 端点并重新发布网页 |
+| `cloudfunctions/roll-ai/` | DeepSeek 代理：对话、工具调用、限流 |
+| `cloudbase.json` | 环境 ID、默认访问域名、`ai_endpoint` |
 | `aliases.json` | 同一玩家多账号合并配置 |
 | `baselines.json` | 核心 / 酱油的表现分基准值，可分别调整 |
 | `mmr.json` | 玩家 MMR 登记，默认空（全部显示 `-`） |
@@ -56,6 +66,7 @@ replay/
 | `一键统计.bat` | 重新生成汇总表 |
 | `一键打开网页.bat` | 重新生成并打开网页 |
 | `一键发布到腾讯云.bat` | 生成网页并上传到腾讯云 CloudBase |
+| `一键部署AI.bat` | 部署云函数、配置 Key、更新 AI 端点 |
 
 ## 一键发布到腾讯云
 
@@ -81,12 +92,36 @@ https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/
 
 默认域名不需要备案；绑定自己的域名需要 ICP 备案。
 
+## AI 匹配助手
+
+Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后可以：
+
+- 和 DeepSeek 对话，让它解释、调整或重新生成阵容
+- AI 提出具体阵容时调用 `display_match`，聊天中弹出对局卡片
+- 卡片上点「采用此阵容」可更新主结果区
+
+约束：
+
+- 只调整当前已选的 10 人，不换人
+- 模型 `deepseek-flash`，通过 CloudBase 云函数 `roll-ai` 代理调用
+- DeepSeek Key 只存在云函数环境变量，网页和 git 中都看不到
+- 页面公开，任何人拿到链接都能使用；云函数有限流（每 IP 6 次/秒）和 3000 token 上限
+
+部署 / 更新 AI 后端：
+
+```
+一键部署AI.bat
+```
+
+它会从 `~/.claude/settings.json` 读取当前 DeepSeek Key，部署云函数，更新 `ai_endpoint` 并重新发布网页。真实配置写入本地的 `cloudbaserc.json`（已在 `.gitignore`）。
+
 ## 手动运行（调试用）
 
 ```bash
 python stats.py          # 汇总统计
 python make_web.py       # 生成 docs/index.html
 python deploy_tcb.py     # 发布到腾讯云
+python deploy_ai.py      # 部署/更新 AI 云函数并重新发布
 python roll.py "A" ... "J"
 ```
 
@@ -142,6 +177,8 @@ mantatool\parse.exe "D:\...\replays\905xxxxxxx.dem"
 - `aliases.json` 中只保留玩家名映射，不含 SteamID
 
 公开的只有 `docs/index.html`，其中是玩家名、评分和统计，不含 SteamID。
+
+AI 对话时，当前 10 人的玩家名、评分和统计会发送给 DeepSeek；不会发送 SteamID。DeepSeek Key 只保存在 CloudBase 云函数环境变量中，不进入页面和 git。
 
 ## 已知限制
 
