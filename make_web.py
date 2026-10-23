@@ -710,6 +710,8 @@ function md(text) {
   return esc(text).replace(/\n/g, "<br>");
 }
 function newStreamBubble() {
+  const tip = $("aiTyping");
+  if (tip) tip.remove();
   const d = document.createElement("div");
   d.className = "msg assistant streaming";
   $("aiMessages").appendChild(d);
