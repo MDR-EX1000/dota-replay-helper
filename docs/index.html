@@ -90,6 +90,77 @@
   .rules-box td, .rules-box th { text-align:left; }
   .footer { margin-top:28px; color:#6f7585; font-size:11.5px; }
 
+  /* 比赛明细 */
+  .m-layout { display:grid; grid-template-columns:260px minmax(0,1fr); gap:18px; align-items:start; }
+  .m-side { position:sticky; top:12px; max-height:calc(100vh - 120px); display:flex; flex-direction:column; min-width:0; }
+  .m-side-head { color:var(--muted); font-size:12px; margin-bottom:8px; }
+  .match-list { overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding-right:4px; }
+  .m-item { text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:9px;
+            padding:9px 11px; cursor:pointer; color:var(--text); }
+  .m-item:hover { border-color:#3a4152; }
+  .m-item.active { border-color:var(--accent); background:#1a2420; }
+  .mi-top { display:flex; justify-content:space-between; font-size:12px; font-weight:700; }
+  .mi-sub { color:var(--muted); font-size:11px; margin-top:3px; }
+  .mi-win { color:var(--accent); } .mi-loss { color:var(--bad); }
+  .m-main { min-width:0; }
+  .match-list { max-width:100%; }
+  .m-head { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .m-title { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .m-title b { font-size:18px; }
+  .m-score { font-size:26px; font-weight:800; letter-spacing:1px; }
+  .m-meta { color:var(--muted); font-size:12px; margin-top:6px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:8px; margin-top:12px; }
+  .kpi { background:#1b1e26; border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .kpi .k { color:var(--muted); font-size:11px; } .kpi .v { font-size:16px; font-weight:700; margin-top:2px; }
+  .subtabs { display:flex; gap:4px; margin:14px 0 10px; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .subtab { background:none; border:0; border-bottom:2px solid transparent; color:var(--muted);
+            padding:8px 12px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .subtab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .subpane { display:none; } .subpane.active { display:block; }
+  .scoreboard { margin-top:10px; }
+  .sb-head { display:flex; justify-content:space-between; font-size:13px; font-weight:700; margin:10px 0 6px; }
+  .sb-radiant { color:var(--accent); } .sb-dire { color:var(--bad); }
+  .m-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .m-table th, .m-table td { padding:7px 8px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  .m-table th { color:var(--muted); font-weight:500; text-align:right; }
+  .m-table th:nth-child(1), .m-table td:nth-child(1),
+  .m-table th:nth-child(2), .m-table td:nth-child(2) { text-align:left; }
+  .hero-cell { font-weight:600; } .hero-cell span { color:var(--muted); font-weight:400; font-size:11px; }
+  .item-chips { display:flex; gap:3px; flex-wrap:wrap; justify-content:flex-end; }
+  .item-chip { background:#222733; border-radius:5px; padding:2px 5px; font-size:10.5px; color:#b9bfcc; }
+  .chart-card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+  .chart-title { font-size:13px; font-weight:600; margin-bottom:6px; }
+  .chart-host { position:relative; width:100%; min-height:200px; }
+  .chart-host svg { display:block; width:100%; overflow:visible; }
+  .chart-legend { display:flex; gap:10px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-top:6px; }
+  .chart-legend i { display:inline-block; width:10px; height:3px; border-radius:2px; margin-right:4px; vertical-align:middle; }
+  .chart-tooltip { position:absolute; pointer-events:none; background:#0f1217; border:1px solid var(--line);
+                   border-radius:6px; padding:6px 8px; font-size:11px; color:var(--text); display:none; z-index:5; white-space:nowrap; }
+  .dmg-bar { display:flex; height:8px; border-radius:4px; overflow:hidden; background:#222733; min-width:120px; }
+  .dmg-bar i { display:block; height:100%; }
+  .dmg-legend { font-size:10.5px; color:var(--muted); margin-top:3px; }
+  .event-list { display:flex; flex-direction:column; gap:2px; }
+  .event-row { display:grid; grid-template-columns:52px 78px minmax(0,1fr); gap:8px; padding:6px 4px;
+               border-bottom:1px solid var(--line); font-size:12px; align-items:baseline; }
+  .ev-time { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .ev-team { font-size:10px; font-weight:700; }
+  .ev-kill { color:#e66767; } .ev-radiant { color:var(--accent); }
+  .ev-desc { color:#cfd5e1; } .ev-desc small { color:var(--muted); }
+  .filter-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .filter-row .chip.active { color:var(--accent); border-color:var(--accent); }
+  .purchase-card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+  .purchase-head { display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:6px; }
+  .purchase-list { display:flex; gap:5px; flex-wrap:wrap; }
+  .purchase-chip { background:#222733; border-radius:5px; padding:2px 6px; font-size:10.5px; color:#b9bfcc; }
+  @media (max-width:900px) {
+    .m-layout { grid-template-columns:1fr; }
+    .m-side { position:static; max-height:none; }
+    .match-list { flex-direction:row; overflow-x:auto; padding-bottom:4px; }
+    .m-item { min-width:180px; flex:0 0 auto; }
+    .m-score { font-size:22px; }
+    .event-row { grid-template-columns:46px 64px minmax(0,1fr); }
+  }
+
   /* AI 匹配助手 */
   .ai-action { display:none; align-items:center; gap:12px; margin:18px 0 8px; flex-wrap:wrap; }
   .ai-hint { color:var(--muted); font-size:12px; }
@@ -158,11 +229,12 @@
 <body>
 <header>
   <h1>Dota 2 对黑数据统计</h1>
-  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-24 00:29</div>
+  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-25 13:56</div>
 </header>
 
 <nav class="tabs">
   <button class="tab active" data-tab="stats">数据统计</button>
+  <button class="tab" data-tab="match">比赛明细</button>
   <button class="tab" data-tab="roll">Roll 阵容</button>
   <button class="tab" data-tab="rules">规则说明</button>
 </nav>
@@ -174,6 +246,18 @@
       <thead id="statsHead"></thead>
       <tbody id="statsBody"></tbody>
     </table>
+  </div>
+</section>
+
+<section id="pane-match" class="pane">
+  <div class="m-layout">
+    <aside class="m-side">
+      <div class="m-side-head">比赛列表 <span id="mMatchCount"></span></div>
+      <div id="matchList" class="match-list"></div>
+    </aside>
+    <main id="matchDetail" class="m-main">
+      <div class="empty">选择一场比赛查看明细</div>
+    </main>
   </div>
 </section>
 
@@ -272,9 +356,11 @@
   </div>
 </section>
 
+<script src="data/matches.js?v=1792907786"></script>
 <script>
-const PLAYERS = [{"name": "不明AOE", "rating": 1007.7, "elo": 1049.2, "perf": 960.2, "role": "核心", "provisional": false, "games": 5, "wins": 4, "losses": 1, "winRate": 80.0, "coreRate": "80%", "rankAll": 5.0, "rankTeam": 2.8, "kda": 2.88, "kd": "7.4/8.6/17.4", "gpm": 427.0, "xpm": 651.2, "nwK": 16.2, "dmgK": 28.0, "dmgTakenK": 22.6, "dmgGold": 1.46, "takenGold": 1.35, "mmr": 3000, "mmrNum": 3000, "heroes": "不朽尸王(1), 主宰(1), 幽鬼(1)"}, {"name": "木小可", "rating": 1039.3, "elo": 1056.2, "perf": 1089.4, "role": "酱油", "provisional": false, "games": 10, "wins": 7, "losses": 3, "winRate": 70.0, "coreRate": "20%", "rankAll": 6.9, "rankTeam": 4.0, "kda": 3.9, "kd": "5.0/6.1/18.8", "gpm": 354.3, "xpm": 559.8, "nwK": 12.9, "dmgK": 17.8, "dmgTakenK": 22.8, "dmgGold": 1.34, "takenGold": 1.72, "mmr": 2000, "mmrNum": 2000, "heroes": "莱恩(1), 谜团(1), 昆卡(1)"}, {"name": "young zhu", "rating": 1031.5, "elo": 1025.4, "perf": 1020.9, "role": "核心", "provisional": false, "games": 8, "wins": 5, "losses": 3, "winRate": 62.5, "coreRate": "100%", "rankAll": 2.88, "rankTeam": 1.75, "kda": 4.19, "kd": "9.6/5.4/12.9", "gpm": 535.5, "xpm": 770.8, "nwK": 18.6, "dmgK": 31.3, "dmgTakenK": 25.9, "dmgGold": 1.62, "takenGold": 1.41, "mmr": 4500, "mmrNum": 4500, "heroes": "殁境神蚀者(1), 齐天大圣(1), 天怒法师(1)"}, {"name": "假赛王，拱手让冠军", "rating": 1029.4, "elo": 1023.4, "perf": 1033.5, "role": "核心", "provisional": false, "games": 10, "wins": 6, "losses": 4, "winRate": 60.0, "coreRate": "90%", "rankAll": 3.3, "rankTeam": 2.1, "kda": 3.94, "kd": "12.5/6.6/13.5", "gpm": 613.6, "xpm": 866.4, "nwK": 22.6, "dmgK": 39.2, "dmgTakenK": 33.3, "dmgGold": 1.72, "takenGold": 1.51, "mmr": 4000, "mmrNum": 4000, "heroes": "斯温(2), 潮汐猎人(1), 冥魂大帝(1)"}, {"name": "WW", "rating": 1014.5, "elo": 1022.3, "perf": 1051.9, "role": "酱油", "provisional": false, "games": 7, "wins": 4, "losses": 3, "winRate": 57.1, "coreRate": "29%", "rankAll": 7.0, "rankTeam": 3.71, "kda": 3.39, "kd": "4.4/6.6/17.9", "gpm": 348.6, "xpm": 535.3, "nwK": 12.1, "dmgK": 15.7, "dmgTakenK": 18.7, "dmgGold": 1.37, "takenGold": 1.77, "mmr": 2000, "mmrNum": 2000, "heroes": "复仇之魂(1), 莱恩(1), 狙击手(1)"}, {"name": "龙鸣", "rating": 1013.6, "elo": 1014.7, "perf": 992.4, "role": "核心", "provisional": false, "games": 9, "wins": 5, "losses": 4, "winRate": 55.6, "coreRate": "67%", "rankAll": 5.22, "rankTeam": 2.89, "kda": 3.82, "kd": "6.7/6.8/19.2", "gpm": 460.7, "xpm": 667.9, "nwK": 16.9, "dmgK": 26.0, "dmgTakenK": 23.3, "dmgGold": 1.57, "takenGold": 1.65, "mmr": 4000, "mmrNum": 4000, "heroes": "沉默术士(1), 幻影刺客(1), 卓尔游侠(1)"}, {"name": "大超哥", "rating": 1025.6, "elo": 1006.1, "perf": 1027.2, "role": "核心", "provisional": false, "games": 10, "wins": 5, "losses": 5, "winRate": 50.0, "coreRate": "100%", "rankAll": 2.9, "rankTeam": 1.6, "kda": 3.91, "kd": "12.5/6.5/12.9", "gpm": 608.3, "xpm": 835.6, "nwK": 22.1, "dmgK": 40.5, "dmgTakenK": 30.7, "dmgGold": 1.68, "takenGold": 1.39, "mmr": 4500, "mmrNum": 4500, "heroes": "幻影刺客(1), 拉席克(1), 玛尔斯(1)"}, {"name": "我才是乃龙", "rating": 1021.5, "elo": 1001.0, "perf": 1037.1, "role": "核心", "provisional": false, "games": 4, "wins": 2, "losses": 2, "winRate": 50.0, "coreRate": "100%", "rankAll": 4.25, "rankTeam": 2.0, "kda": 4.14, "kd": "12.5/7.2/17.5", "gpm": 565.5, "xpm": 796.2, "nwK": 22.1, "dmgK": 42.2, "dmgTakenK": 34.7, "dmgGold": 2.1, "takenGold": 1.88, "mmr": 4000, "mmrNum": 4000, "heroes": "莉娜(1), 斧王(1), 虚空假面(1)"}, {"name": "猪猪侠", "rating": 986.2, "elo": 997.2, "perf": 991.1, "role": "酱油", "provisional": false, "games": 4, "wins": 2, "losses": 2, "winRate": 50.0, "coreRate": "25%", "rankAll": 8.0, "rankTeam": 4.5, "kda": 1.73, "kd": "3.2/13.0/19.2", "gpm": 334.0, "xpm": 481.5, "nwK": 13.1, "dmgK": 23.7, "dmgTakenK": 37.4, "dmgGold": 1.75, "takenGold": 2.77, "mmr": 2000, "mmrNum": 2000, "heroes": "术士(1), 杰奇洛(1), 钢背兽(1)"}, {"name": "奶龙", "rating": 1003.6, "elo": 973.6, "perf": 1047.1, "role": "酱油", "provisional": false, "games": 8, "wins": 3, "losses": 5, "winRate": 37.5, "coreRate": "38%", "rankAll": 8.12, "rankTeam": 4.12, "kda": 2.68, "kd": "4.0/9.2/20.8", "gpm": 346.6, "xpm": 566.5, "nwK": 12.0, "dmgK": 20.2, "dmgTakenK": 25.1, "dmgGold": 1.77, "takenGold": 2.11, "mmr": 3000, "mmrNum": 3000, "heroes": "寒冬飞龙(1), 撼地者(1), 暗影萨满(1)"}, {"name": "西恩DoTA亡", "rating": 998.7, "elo": 955.5, "perf": 1021.8, "role": "核心", "provisional": false, "games": 9, "wins": 3, "losses": 6, "winRate": 33.3, "coreRate": "100%", "rankAll": 3.0, "rankTeam": 1.78, "kda": 4.88, "kd": "9.6/4.8/13.8", "gpm": 538.7, "xpm": 719.7, "nwK": 19.7, "dmgK": 26.6, "dmgTakenK": 26.1, "dmgGold": 1.27, "takenGold": 1.29, "mmr": 4000, "mmrNum": 4000, "heroes": "自然先知(1), 虚无之灵(1), 莉娜(1)"}, {"name": "肛客", "rating": 961.5, "elo": 965.2, "perf": 951.4, "role": "酱油", "provisional": false, "games": 6, "wins": 2, "losses": 4, "winRate": 33.3, "coreRate": "33%", "rankAll": 7.5, "rankTeam": 3.83, "kda": 1.55, "kd": "2.5/9.7/12.5", "gpm": 340.0, "xpm": 479.3, "nwK": 10.6, "dmgK": 12.6, "dmgTakenK": 27.5, "dmgGold": 1.23, "takenGold": 2.64, "mmr": 2000, "mmrNum": 2000, "heroes": "伐木机(1), 暗夜魔王(1), 钢背兽(1)"}, {"name": "K2", "rating": 944.3, "elo": 910.2, "perf": 967.3, "role": "酱油", "provisional": false, "games": 10, "wins": 2, "losses": 8, "winRate": 20.0, "coreRate": "0%", "rankAll": 8.9, "rankTeam": 4.5, "kda": 1.76, "kd": "3.2/10.4/15.1", "gpm": 291.9, "xpm": 452.9, "nwK": 10.1, "dmgK": 15.4, "dmgTakenK": 22.8, "dmgGold": 1.58, "takenGold": 2.23, "mmr": 2000, "mmrNum": 2000, "heroes": "巫妖(1), 水晶室女(1), 司夜刺客(1)"}];
-const MATCH_COUNT = 10;
+const PLAYERS = [{"name": "木小可", "rating": 1025.3, "elo": 1049.8, "perf": 1051.4, "role": "酱油", "provisional": false, "games": 14, "wins": 9, "losses": 5, "winRate": 64.3, "coreRate": "21%", "rankAll": 7.29, "rankTeam": 4.07, "kda": 3.25, "kd": "4.1/6.2/16.1", "gpm": 335.9, "xpm": 523.9, "nwK": 12.3, "dmgK": 16.6, "dmgTakenK": 22.1, "dmgGold": 1.34, "takenGold": 1.84, "mmr": 2000, "mmrNum": 2000, "heroes": "钢背兽(2), 莱恩(1), 谜团(1)"}, {"name": "young zhu", "rating": 1047.3, "elo": 1045.8, "perf": 1046.7, "role": "核心", "provisional": false, "games": 11, "wins": 7, "losses": 4, "winRate": 63.6, "coreRate": "100%", "rankAll": 2.73, "rankTeam": 1.73, "kda": 4.79, "kd": "10.5/4.8/12.6", "gpm": 562.1, "xpm": 820.2, "nwK": 21.1, "dmgK": 32.8, "dmgTakenK": 25.1, "dmgGold": 1.54, "takenGold": 1.25, "mmr": 4500, "mmrNum": 4500, "heroes": "殁境神蚀者(1), 齐天大圣(1), 天怒法师(1)"}, {"name": "不明AOE", "rating": 984.4, "elo": 1028.5, "perf": 910.0, "role": "核心", "provisional": false, "games": 8, "wins": 5, "losses": 3, "winRate": 62.5, "coreRate": "62%", "rankAll": 5.88, "rankTeam": 3.12, "kda": 2.06, "kd": "5.2/9.0/13.2", "gpm": 383.8, "xpm": 546.6, "nwK": 13.9, "dmgK": 23.1, "dmgTakenK": 19.3, "dmgGold": 1.4, "takenGold": 1.36, "mmr": 3000, "mmrNum": 3000, "heroes": "不朽尸王(1), 主宰(1), 幽鬼(1)"}, {"name": "WW", "rating": 1012.8, "elo": 1033.6, "perf": 1031.3, "role": "酱油", "provisional": false, "games": 10, "wins": 6, "losses": 4, "winRate": 60.0, "coreRate": "20%", "rankAll": 7.6, "rankTeam": 4.1, "kda": 3.11, "kd": "4.0/6.3/15.6", "gpm": 326.9, "xpm": 492.2, "nwK": 11.2, "dmgK": 14.1, "dmgTakenK": 19.3, "dmgGold": 1.3, "takenGold": 1.8, "mmr": 2000, "mmrNum": 2000, "heroes": "莱恩(2), 上古巨神(2), 复仇之魂(1)"}, {"name": "假赛王，拱手让冠军", "rating": 1022.6, "elo": 1019.4, "perf": 1016.0, "role": "核心", "provisional": false, "games": 14, "wins": 8, "losses": 6, "winRate": 57.1, "coreRate": "93%", "rankAll": 3.29, "rankTeam": 2.0, "kda": 3.81, "kd": "11.6/6.0/11.3", "gpm": 606.5, "xpm": 844.4, "nwK": 22.2, "dmgK": 34.4, "dmgTakenK": 30.2, "dmgGold": 1.52, "takenGold": 1.35, "mmr": 4000, "mmrNum": 4000, "heroes": "斯温(3), 潮汐猎人(1), 冥魂大帝(1)"}, {"name": "大超哥", "rating": 1019.4, "elo": 1007.3, "perf": 1004.8, "role": "核心", "provisional": false, "games": 12, "wins": 6, "losses": 6, "winRate": 50.0, "coreRate": "100%", "rankAll": 3.08, "rankTeam": 1.75, "kda": 3.71, "kd": "11.0/6.0/11.2", "gpm": 590.1, "xpm": 786.4, "nwK": 20.9, "dmgK": 35.6, "dmgTakenK": 28.5, "dmgGold": 1.51, "takenGold": 1.32, "mmr": 4500, "mmrNum": 4500, "heroes": "幻影刺客(1), 拉席克(1), 玛尔斯(1)"}, {"name": "龙鸣", "rating": 999.6, "elo": 994.0, "perf": 973.5, "role": "核心", "provisional": false, "games": 12, "wins": 6, "losses": 6, "winRate": 50.0, "coreRate": "75%", "rankAll": 4.92, "rankTeam": 2.67, "kda": 3.63, "kd": "5.9/6.1/16.2", "gpm": 471.2, "xpm": 678.9, "nwK": 17.1, "dmgK": 23.1, "dmgTakenK": 21.0, "dmgGold": 1.38, "takenGold": 1.51, "mmr": 4000, "mmrNum": 4000, "heroes": "复仇之魂(2), 沉默术士(1), 幻影刺客(1)"}, {"name": "猫不叫对不胡吃树加一", "rating": 986.3, "elo": 1005.2, "perf": 980.8, "role": "核心", "provisional": false, "games": 2, "wins": 1, "losses": 1, "winRate": 50.0, "coreRate": "100%", "rankAll": 4.0, "rankTeam": 3.0, "kda": 3.29, "kd": "7.5/7.0/15.5", "gpm": 544.5, "xpm": 709.0, "nwK": 21.9, "dmgK": 25.4, "dmgTakenK": 35.3, "dmgGold": 1.12, "takenGold": 1.58, "mmr": 2000, "mmrNum": 2000, "heroes": "龙骑士(1), 末日使者(1)"}, {"name": "猪猪侠", "rating": 986.2, "elo": 997.2, "perf": 991.1, "role": "酱油", "provisional": false, "games": 4, "wins": 2, "losses": 2, "winRate": 50.0, "coreRate": "25%", "rankAll": 8.0, "rankTeam": 4.5, "kda": 1.73, "kd": "3.2/13.0/19.2", "gpm": 334.0, "xpm": 481.5, "nwK": 13.1, "dmgK": 23.7, "dmgTakenK": 37.4, "dmgGold": 1.75, "takenGold": 2.77, "mmr": 2000, "mmrNum": 2000, "heroes": "术士(1), 杰奇洛(1), 钢背兽(1)"}, {"name": "西恩DoTA亡", "rating": 1019.0, "elo": 992.4, "perf": 1040.3, "role": "核心", "provisional": false, "games": 13, "wins": 6, "losses": 7, "winRate": 46.2, "coreRate": "100%", "rankAll": 2.69, "rankTeam": 1.69, "kda": 5.24, "kd": "8.8/4.2/13.4", "gpm": 571.0, "xpm": 749.3, "nwK": 21.1, "dmgK": 26.8, "dmgTakenK": 23.2, "dmgGold": 1.22, "takenGold": 1.08, "mmr": 4000, "mmrNum": 4000, "heroes": "莉娜(2), 自然先知(1), 虚无之灵(1)"}, {"name": "我才是乃龙", "rating": 1007.4, "elo": 983.6, "perf": 1013.1, "role": "核心", "provisional": false, "games": 7, "wins": 3, "losses": 4, "winRate": 42.9, "coreRate": "100%", "rankAll": 3.86, "rankTeam": 1.71, "kda": 3.79, "kd": "10.1/6.0/12.6", "gpm": 568.0, "xpm": 795.3, "nwK": 21.8, "dmgK": 34.2, "dmgTakenK": 33.0, "dmgGold": 1.66, "takenGold": 1.66, "mmr": 4000, "mmrNum": 4000, "heroes": "莉娜(2), 斧王(1), 虚空假面(1)"}, {"name": "肛客", "rating": 968.6, "elo": 979.5, "perf": 956.1, "role": "酱油", "provisional": false, "games": 7, "wins": 3, "losses": 4, "winRate": 42.9, "coreRate": "43%", "rankAll": 7.29, "rankTeam": 3.71, "kda": 1.61, "kd": "2.6/8.9/11.7", "gpm": 353.3, "xpm": 505.1, "nwK": 12.1, "dmgK": 14.8, "dmgTakenK": 29.5, "dmgGold": 1.25, "takenGold": 2.54, "mmr": 2000, "mmrNum": 2000, "heroes": "钢背兽(2), 伐木机(1), 暗夜魔王(1)"}, {"name": "奶龙", "rating": 1017.1, "elo": 980.1, "perf": 1083.4, "role": "酱油", "provisional": false, "games": 12, "wins": 5, "losses": 7, "winRate": 41.7, "coreRate": "25%", "rankAll": 8.08, "rankTeam": 4.25, "kda": 3.24, "kd": "3.5/7.2/20.0", "gpm": 337.6, "xpm": 543.1, "nwK": 11.5, "dmgK": 18.9, "dmgTakenK": 22.2, "dmgGold": 1.77, "takenGold": 1.9, "mmr": 3000, "mmrNum": 3000, "heroes": "寒冬飞龙(2), 撼地者(1), 暗影萨满(1)"}, {"name": "K2", "rating": 929.9, "elo": 883.7, "perf": 954.6, "role": "酱油", "provisional": false, "games": 14, "wins": 3, "losses": 11, "winRate": 21.4, "coreRate": "0%", "rankAll": 8.79, "rankTeam": 4.43, "kda": 1.77, "kd": "2.7/9.4/14.0", "gpm": 295.6, "xpm": 449.5, "nwK": 10.3, "dmgK": 14.6, "dmgTakenK": 21.0, "dmgGold": 1.45, "takenGold": 2.01, "mmr": 2000, "mmrNum": 2000, "heroes": "巫妖(2), 水晶室女(2), 杰奇洛(2)"}];
+const MATCH_COUNT = 14;
+const MATCHES = (window.MATCH_DATA && window.MATCH_DATA.matches) || [];
 const AI_ENDPOINT = "https://unhappy-grouse-d3gsbs7inb2cb10d6.service.tcloudbase.com/api/roll-ai";
 const state = {
   selected: new Set(PLAYERS.map(p => p.name)),
@@ -293,6 +379,7 @@ document.querySelectorAll(".tab").forEach(btn => {
 function showTab(name) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".pane").forEach(p => p.classList.toggle("active", p.id === "pane-" + name));
+  if (name === "match") initMatchTab();
 }
 
 /* ---------- 数据统计 ---------- */
@@ -359,6 +446,312 @@ function renderStats() {
     const cls = c.clsFn ? c.clsFn(p) : (c.cls || "");
     return `<td class="${cls}">${c.fmt(p)}</td>`;
   }).join("") + "</tr>").join("");
+}
+
+/* ---------- 比赛明细 ---------- */
+const matchState = { initialized: false, id: null, sub: "overview", eventFilter: "all", hideConsumables: false, onlyFinished: false };
+const MATCH_SUBS = [
+  ["overview", "总览"], ["economy", "经济"], ["combat", "战斗"],
+  ["items", "装备"], ["events", "事件"]
+];
+const CONSUMABLES = new Set(["tango", "flask", "clarity", "dust", "smoke_of_deceit", "ward_observer", "ward_sentry", "ward_dispenser", "tpscroll", "teleport_scroll", "energy_booster", "bottle", "magic_stick", "magic_wand"]);
+
+function fmtClock(sec) {
+  const neg = sec < 0;
+  let s = Math.abs(Math.round(sec));
+  const m = Math.floor(s / 60);
+  s = s % 60;
+  return (neg ? "-" : "") + m + ":" + String(s).padStart(2, "0");
+}
+function fmtDuration(sec) { return fmtClock(sec); }
+function kfmt(n) {
+  n = Number(n) || 0;
+  if (Math.abs(n) >= 10000) return (n / 1000).toFixed(1) + "K";
+  return String(Math.round(n));
+}
+function teamZh(t) { return t === "radiant" ? "天辉" : "夜魇"; }
+function matchById(id) { return MATCHES.find(m => m.id === id) || null; }
+
+function initMatchTab() {
+  if (matchState.initialized) { if (matchState.id) renderMatchDetail(matchById(matchState.id)); return; }
+  matchState.initialized = true;
+  const q = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+  const hashId = q.get("match");
+  const hashSub = q.get("sub");
+  if (hashSub && MATCH_SUBS.some(x => x[0] === hashSub)) matchState.sub = hashSub;
+  $("mMatchCount").textContent = MATCHES.length + " 场";
+  renderMatchList();
+  const first = hashId && matchById(hashId) ? hashId : (MATCHES[0] && MATCHES[0].id);
+  if (first) selectMatch(first, false);
+}
+
+function renderMatchList() {
+  $("matchList").innerHTML = MATCHES.map(m => {
+    const win = m.winner === "radiant" ? "天辉胜" : "夜魇胜";
+    return `<button class="m-item ${m.id === matchState.id ? "active" : ""}" data-id="${m.id}">
+      <div class="mi-top"><span class="${m.radiant_win ? "mi-win" : "mi-loss"}">${win}</span>
+        <span>${m.score.radiant} - ${m.score.dire}</span></div>
+      <div class="mi-sub">${esc(m.date)} · ${fmtDuration(m.duration)} · ${esc(m.mode)}</div>
+    </button>`;
+  }).join("");
+  document.querySelectorAll("#matchList .m-item").forEach(btn => {
+    btn.onclick = () => selectMatch(btn.dataset.id, true);
+  });
+}
+
+function selectMatch(id, updateHash) {
+  if (!matchById(id)) return;
+  matchState.id = id;
+  matchState.eventFilter = "all";
+  renderMatchList();
+  renderMatchDetail(matchById(id));
+  if (updateHash) {
+    try { history.replaceState(null, "", "#match=" + id + "&sub=" + matchState.sub); }
+    catch (e) { location.hash = "match=" + id + "&sub=" + matchState.sub; }
+  }
+}
+
+function renderMatchDetail(m) {
+  if (!m) return;
+  const win = m.winner === "radiant" ? "天辉胜利" : "夜魇胜利";
+  const kpi = (side) => {
+    const t = m.teams[side];
+    return `<div class="kpis">
+      <div class="kpi"><div class="k">击杀</div><div class="v">${t.kills}</div></div>
+      <div class="kpi"><div class="k">死亡</div><div class="v">${t.deaths}</div></div>
+      <div class="kpi"><div class="k">助攻</div><div class="v">${t.assists}</div></div>
+      <div class="kpi"><div class="k">净资产</div><div class="v">${kfmt(t.net_worth)}</div></div>
+      <div class="kpi"><div class="k">英雄伤害</div><div class="v">${kfmt(t.hero_damage)}</div></div>
+      <div class="kpi"><div class="k">推塔伤害</div><div class="v">${kfmt(t.tower_damage)}</div></div>
+    </div>`;
+  };
+  $("matchDetail").innerHTML = `
+    <div class="m-head">
+      <div class="m-title">
+        <span class="m-score">${m.score.radiant} <span style="color:var(--muted);font-size:16px">-</span> ${m.score.dire}</span>
+        <b class="${m.radiant_win ? "mi-win" : "mi-loss"}">${win}</b>
+        <span class="m-meta">${esc(m.date)} · ${fmtDuration(m.duration)} · ${esc(m.mode)} · #${m.id}</span>
+      </div>
+      <div style="margin-top:12px"><div class="sb-head sb-radiant">天辉</div>${kpi("radiant")}
+        <div class="sb-head sb-dire">夜魇</div>${kpi("dire")}</div>
+    </div>
+    <div class="subtabs" id="mSubtabs">${MATCH_SUBS.map(([k, label]) =>
+      `<button class="subtab ${k === matchState.sub ? "active" : ""}" data-sub="${k}">${label}</button>`).join("")}</div>
+    <div id="mSub"></div>`;
+  document.querySelectorAll("#mSubtabs .subtab").forEach(btn => {
+    btn.onclick = () => {
+      matchState.sub = btn.dataset.sub;
+      document.querySelectorAll("#mSubtabs .subtab").forEach(b => b.classList.toggle("active", b === btn));
+      renderSub(m);
+      try { history.replaceState(null, "", "#match=" + m.id + "&sub=" + matchState.sub); } catch (e) {}
+    };
+  });
+  renderSub(m);
+}
+
+function renderSub(m) {
+  const host = $("mSub");
+  if (!host) return;
+  host.innerHTML = `<div class="subpane active" id="mSubPane"></div>`;
+  const pane = $("mSubPane");
+  if (matchState.sub === "economy") renderEconomy(pane, m);
+  else if (matchState.sub === "combat") renderCombat(pane, m);
+  else if (matchState.sub === "items") renderItems(pane, m);
+  else if (matchState.sub === "events") renderEvents(pane, m);
+  else renderOverview(pane, m);
+}
+
+function scoreboardTable(team, m) {
+  const players = m.players.filter(p => p.team === team).sort((a, b) => b.net_worth - a.net_worth);
+  return `<div class="sb-head ${team === "radiant" ? "sb-radiant" : "sb-dire"}">${teamZh(team)}</div>
+  <div class="table-wrap"><table class="m-table">
+    <thead><tr><th>英雄</th><th>玩家</th><th>等级</th><th>K/D/A</th><th>净资产</th><th>GPM/XPM</th><th>正/反</th><th>装备</th></tr></thead>
+    <tbody>${players.map(p => `<tr>
+      <td class="hero-cell">${esc(p.hero_zh)}<span><br>${esc(p.hero)}</span></td>
+      <td>${esc(p.name)}</td><td>${p.level}</td><td>${p.kills}/${p.deaths}/${p.assists}</td>
+      <td>${kfmt(p.net_worth)}</td><td>${p.gpm}/${p.xpm}</td><td>${p.last_hits}/${p.denies}</td>
+      <td><div class="item-chips">${p.items.map(i => `<span class="item-chip" title="${esc(i.key)}">${esc(i.zh)}</span>`).join("")}</div></td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+
+function renderOverview(host, m) {
+  host.innerHTML = scoreboardTable("radiant", m) + scoreboardTable("dire", m);
+}
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs || {}) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function drawLineChart(host, times, series, opts) {
+  host.innerHTML = "";
+  if (!times || !times.length || !series || !series.length) {
+    host.innerHTML = '<div class="empty">暂无数据</div>';
+    return;
+  }
+  const W = Math.max(320, host.clientWidth || 720);
+  const H = opts.height || 210;
+  const pad = { l: 52, r: 18, t: 12, b: 24 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  let vals = [];
+  series.forEach(s => s.values.forEach(v => vals.push(Number(v) || 0)));
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (opts.zero) { min = Math.min(min, 0); max = Math.max(max, 0); }
+  if (min === max) { min -= 1; max += 1; }
+  const padY = (max - min) * 0.08;
+  min -= padY; max += padY;
+  const x = i => pad.l + (times.length <= 1 ? 0 : i / (times.length - 1) * pw);
+  const y = v => pad.t + (max - v) / (max - min) * ph;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opts.title || "折线图" });
+  for (let i = 0; i <= 4; i++) {
+    const v = min + (max - min) * i / 4;
+    svg.appendChild(svgEl("line", { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), stroke: "#2c2c2a", "stroke-width": 1 }));
+    const t = svgEl("text", { x: pad.l - 6, y: y(v) + 3, fill: "#898781", "font-size": 10, "text-anchor": "end" });
+    t.textContent = kfmt(v); svg.appendChild(t);
+  }
+  if (opts.zero) {
+    svg.appendChild(svgEl("line", { x1: pad.l, x2: W - pad.r, y1: y(0), y2: y(0), stroke: "#4a4a46", "stroke-width": 1 }));
+  }
+  const labels = [0, Math.floor((times.length - 1) / 2), times.length - 1];
+  labels.forEach(i => {
+    const t = svgEl("text", { x: x(i), y: H - 6, fill: "#898781", "font-size": 10,
+      "text-anchor": i === 0 ? "start" : (i === times.length - 1 ? "end" : "middle") });
+    t.textContent = fmtClock(times[i]); svg.appendChild(t);
+  });
+  const colors = opts.colors || ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"];
+  series.forEach((s, si) => {
+    const pts = s.values.map((v, i) => `${x(i)},${y(Number(v) || 0)}`).join(" ");
+    svg.appendChild(svgEl("polyline", { points: pts, fill: "none",
+      stroke: s.color || colors[si % colors.length], "stroke-width": 2, "stroke-linejoin": "round" }));
+  });
+  host.appendChild(svg);
+  if (series.length > 1 || opts.legend) {
+    const lg = document.createElement("div");
+    lg.className = "chart-legend";
+    lg.innerHTML = series.map((s, si) => `<span><i style="background:${s.color || colors[si % colors.length]}"></i>${esc(s.name)}</span>`).join("");
+    host.appendChild(lg);
+  }
+  const tip = document.createElement("div");
+  tip.className = "chart-tooltip";
+  host.appendChild(tip);
+  const line = svgEl("line", { x1: 0, x2: 0, y1: pad.t, y2: pad.t + ph, stroke: "#5b6070", "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 });
+  svg.appendChild(line);
+  svg.addEventListener("mousemove", ev => {
+    const rect = svg.getBoundingClientRect();
+    const px = (ev.clientX - rect.left) * (W / rect.width);
+    let idx = Math.round((px - pad.l) / pw * (times.length - 1));
+    idx = Math.max(0, Math.min(times.length - 1, idx));
+    line.setAttribute("x1", x(idx)); line.setAttribute("x2", x(idx)); line.setAttribute("opacity", 1);
+    tip.style.display = "block";
+    tip.style.left = Math.min(W - 160, x(idx) + 10) + "px";
+    tip.style.top = "6px";
+    tip.innerHTML = `<b>${fmtClock(times[idx])}</b><br>` +
+      series.map((s, si) => `<span style="color:${s.color || colors[si % colors.length]}">●</span> ${esc(s.name)}: ${kfmt(s.values[idx])}`).join("<br>");
+  });
+  svg.addEventListener("mouseleave", () => { line.setAttribute("opacity", 0); tip.style.display = "none"; });
+}
+
+function renderEconomy(host, m) {
+  const ec = m.economy;
+  if (!ec || !ec.times || !ec.times.length) {
+    host.innerHTML = '<div class="empty">该场比赛没有经济曲线数据（可能未重新解析）。</div>';
+    return;
+  }
+  const diff = (a, b) => a.map((v, i) => (Number(v) || 0) - (Number(b[i]) || 0));
+  const goldDiff = diff(ec.team.radiant.gold, ec.team.dire.gold);
+  const xpDiff = diff(ec.team.radiant.xp, ec.team.dire.xp);
+  host.innerHTML = `
+    <div class="chart-card"><div class="chart-title">团队经济差（天辉 − 夜魇）</div><div class="chart-host" id="chartGold"></div></div>
+    <div class="chart-card"><div class="chart-title">团队经验差（天辉 − 夜魇）</div><div class="chart-host" id="chartXp"></div></div>
+    <div class="chart-card"><div class="chart-title">天辉玩家净资产</div><div class="chart-host" id="chartNwR"></div></div>
+    <div class="chart-card"><div class="chart-title">夜魇玩家净资产</div><div class="chart-host" id="chartNwD"></div></div>
+    <div class="why">数据来源：${ec.source === "snapshot" ? "每游戏分钟采样" : "由金钱/经验日志估算"}${ec.approx ? "（近似）" : ""}</div>`;
+  drawLineChart($("chartGold"), ec.times, [{ name: "经济差", values: goldDiff, color: "#199e70" }], { zero: true, legend: false, title: "团队经济差" });
+  drawLineChart($("chartXp"), ec.times, [{ name: "经验差", values: xpDiff, color: "#3987e5" }], { zero: true, legend: false, title: "团队经验差" });
+  const playerSeries = (team, colors) => m.players.filter(p => p.team === team).map((p, i) => {
+    const ep = (ec.players || []).find(x => x.pid === p.pid);
+    return { name: p.hero_zh || p.hero, values: ep ? ep.net_worth : [], color: colors[i % colors.length] };
+  });
+  const colors = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"];
+  drawLineChart($("chartNwR"), ec.times, playerSeries("radiant", colors), { height: 200, legend: true, title: "天辉玩家净资产" });
+  drawLineChart($("chartNwD"), ec.times, playerSeries("dire", colors), { height: 200, legend: true, title: "夜魇玩家净资产" });
+}
+
+function damageBar(p, key) {
+  const d = (p.damage && p.damage[key]) || {};
+  const vals = [["physical", "物理", "#3987e5"], ["magical", "魔法", "#d95926"], ["pure", "纯粹", "#199e70"], ["other", "其他", "#898781"]];
+  const total = vals.reduce((s, v) => s + (Number(d[v[0]]) || 0), 0) || 1;
+  return `<div class="dmg-bar">${vals.map(v => {
+    const pct = (Number(d[v[0]]) || 0) / total * 100;
+    return pct > 0 ? `<i style="width:${pct}%;background:${v[2]}" title="${v[1]} ${kfmt(d[v[0]])}"></i>` : "";
+  }).join("")}</div><div class="dmg-legend">${vals.map(v => `${v[1]} ${kfmt(d[v[0]])}`).join(" · ")}</div>`;
+}
+
+function renderCombat(host, m) {
+  const table = (team) => {
+    const ps = m.players.filter(p => p.team === team).sort((a, b) => b.hero_damage - a.hero_damage);
+    return `<div class="sb-head ${team === "radiant" ? "sb-radiant" : "sb-dire"}">${teamZh(team)}</div>
+    <div class="table-wrap"><table class="m-table">
+      <thead><tr><th>英雄</th><th>造成伤害</th><th>承受伤害</th><th>推塔伤害</th><th>眩晕</th><th>治疗</th><th>插眼/反眼</th></tr></thead>
+      <tbody>${ps.map(p => `<tr><td class="hero-cell">${esc(p.hero_zh)}<span><br>${esc(p.name)}</span></td>
+        <td>${kfmt(p.hero_damage)}${damageBar(p, "dealt")}</td>
+        <td>${kfmt(p.hero_damage_taken)}${damageBar(p, "taken")}</td>
+        <td>${kfmt(p.tower_damage)}</td><td>${Number(p.stuns).toFixed(1)}s</td>
+        <td>${kfmt(p.healing)}</td><td>${p.wards_placed}/${p.wards_destroyed}</td></tr>`).join("")}</tbody>
+    </table></div>`;
+  };
+  host.innerHTML = table("radiant") + table("dire");
+}
+
+function renderItems(host, m) {
+  const cards = m.players.map(p => {
+    let rows = (m.purchases || []).filter(x => x.pid === p.pid);
+    if (matchState.hideConsumables) rows = rows.filter(x => !CONSUMABLES.has(x.item));
+    if (matchState.onlyFinished) rows = rows.filter(x => !x.recipe && x.cost >= 2000);
+    rows.sort((a, b) => a.t - b.t);
+    return `<div class="purchase-card">
+      <div class="purchase-head"><span>${esc(p.hero_zh)} · ${esc(p.name)}</span>
+        <span class="item-chips">${p.items.map(i => `<span class="item-chip">${esc(i.zh)}</span>`).join("")}</span></div>
+      <div class="purchase-list">${rows.map(x => `<span class="purchase-chip" title="${esc(x.item)}">[${fmtClock(x.t)}] ${esc(x.item_zh)} ${x.cost || ""}</span>`).join("") || '<span class="why">没有购买记录</span>'}</div>
+    </div>`;
+  }).join("");
+  host.innerHTML = `<div class="filter-row">
+    <label class="chip"><input type="checkbox" id="hideCons" ${matchState.hideConsumables ? "checked" : ""}> 隐藏消耗品</label>
+    <label class="chip"><input type="checkbox" id="onlyFin" ${matchState.onlyFinished ? "checked" : ""}> 只看成装</label>
+  </div>${cards}`;
+  $("hideCons").onchange = e => { matchState.hideConsumables = e.target.checked; renderItems(host, m); };
+  $("onlyFin").onchange = e => { matchState.onlyFinished = e.target.checked; renderItems(host, m); };
+}
+
+function renderEvents(host, m) {
+  const items = [];
+  (m.kills || []).forEach(k => items.push({ t: k.t, kind: "kill", d: k }));
+  (m.objectives || []).forEach(o => items.push({ t: o.t, kind: "objective", d: o }));
+  items.sort((a, b) => a.t - b.t);
+  const filters = [["all", "全部"], ["kill", "击杀"], ["tower", "防御塔"], ["rax", "兵营"], ["roshan", "肉山"], ["aegis", "不朽盾"], ["other", "其他"]];
+  const filtered = items.filter(x => matchState.eventFilter === "all" ||
+    (matchState.eventFilter === "kill" ? x.kind === "kill" : (x.kind === "objective" && x.d.kind === matchState.eventFilter)));
+  const rows = filtered.map(x => {
+    if (x.kind === "kill") {
+      const k = x.d;
+      const team = k.team === "radiant" ? "ev-radiant" : "ev-kill";
+      return `<div class="event-row"><span class="ev-time">${fmtClock(k.t)}</span>
+        <span class="ev-team ${team}">${teamZh(k.team)}</span>
+        <span class="ev-desc">${k.first_blood ? '<b style="color:#ffcc66">一血</b> ' : ""}${esc(k.killer_zh)} → ${esc(k.victim_zh)}
+        ${k.assists.length ? `<small>助攻：${k.assists.map(a => esc(a.zh)).join("、")}</small>` : ""}</span></div>`;
+    }
+    const o = x.d;
+    return `<div class="event-row"><span class="ev-time">${fmtClock(o.t)}</span>
+      <span class="ev-team ${o.team === "radiant" ? "ev-radiant" : "ev-kill"}">${teamZh(o.team)}</span>
+      <span class="ev-desc">${esc(o.label)}${o.killer_zh ? ` <small>${esc(o.killer_zh)}</small>` : ""}</span></div>`;
+  }).join("");
+  host.innerHTML = `<div class="filter-row">${filters.map(([k, label]) =>
+    `<button class="chip ${matchState.eventFilter === k ? "active" : ""}" data-filter="${k}">${label}</button>`).join("")}</div>
+    <div class="event-list">${rows || '<div class="empty">没有事件</div>'}</div>`;
+  document.querySelectorAll("#mSubPane .filter-row .chip").forEach(btn => {
+    btn.onclick = () => { matchState.eventFilter = btn.dataset.filter; renderEvents(host, m); };
+  });
 }
 
 /* ---------- 选人 ---------- */
@@ -572,6 +965,9 @@ function updateAIAction() {
   if (!AI_ENDPOINT) {
     btn.disabled = true;
     $("aiHint").textContent = "AI 助手尚未部署，请先运行一键部署 AI";
+  } else if (location.protocol === "file:") {
+    btn.disabled = true;
+    $("aiHint").textContent = "本地文件模式无法使用 AI，请打开线上地址";
   } else {
     btn.disabled = false;
     $("aiHint").textContent = "在已 roll 的结果上和 AI 讨论、微调";
@@ -881,6 +1277,30 @@ document.querySelectorAll(".chip").forEach(c => {
 });
 renderStats();
 renderPlayers();
+
+window.addEventListener("hashchange", () => {
+  if (!location.hash.startsWith("#match=")) return;
+  const q = new URLSearchParams(location.hash.slice(1));
+  const id = q.get("match");
+  if (!id) return;
+  showTab("match");
+  const sub = q.get("sub");
+  if (sub && MATCH_SUBS.some(x => x[0] === sub)) matchState.sub = sub;
+  if (id !== matchState.id) selectMatch(id, false);
+  else if (matchState.id) renderMatchDetail(matchById(matchState.id));
+});
+
+let mResizeTimer = null;
+window.addEventListener("resize", () => {
+  if (!$("pane-match").classList.contains("active") || !matchState.id) return;
+  clearTimeout(mResizeTimer);
+  mResizeTimer = setTimeout(() => renderSub(matchById(matchState.id)), 180);
+});
+
+if (location.hash.startsWith("#match=")) {
+  showTab("match");
+  initMatchTab();
+}
 
 // 预览模式：index.html?demo=1 自动切到 Roll 并生成 3 套
 if (new URLSearchParams(location.search).get("demo")) {

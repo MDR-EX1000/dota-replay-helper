@@ -16,6 +16,7 @@ import os
 from datetime import datetime
 
 import balance
+import make_match_data
 import stats
 
 REPLAY_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -154,6 +155,77 @@ TEMPLATE = r"""<!DOCTYPE html>
   .rules-box td, .rules-box th { text-align:left; }
   .footer { margin-top:28px; color:#6f7585; font-size:11.5px; }
 
+  /* 比赛明细 */
+  .m-layout { display:grid; grid-template-columns:260px minmax(0,1fr); gap:18px; align-items:start; }
+  .m-side { position:sticky; top:12px; max-height:calc(100vh - 120px); display:flex; flex-direction:column; min-width:0; }
+  .m-side-head { color:var(--muted); font-size:12px; margin-bottom:8px; }
+  .match-list { overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding-right:4px; }
+  .m-item { text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:9px;
+            padding:9px 11px; cursor:pointer; color:var(--text); }
+  .m-item:hover { border-color:#3a4152; }
+  .m-item.active { border-color:var(--accent); background:#1a2420; }
+  .mi-top { display:flex; justify-content:space-between; font-size:12px; font-weight:700; }
+  .mi-sub { color:var(--muted); font-size:11px; margin-top:3px; }
+  .mi-win { color:var(--accent); } .mi-loss { color:var(--bad); }
+  .m-main { min-width:0; }
+  .match-list { max-width:100%; }
+  .m-head { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .m-title { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .m-title b { font-size:18px; }
+  .m-score { font-size:26px; font-weight:800; letter-spacing:1px; }
+  .m-meta { color:var(--muted); font-size:12px; margin-top:6px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:8px; margin-top:12px; }
+  .kpi { background:#1b1e26; border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .kpi .k { color:var(--muted); font-size:11px; } .kpi .v { font-size:16px; font-weight:700; margin-top:2px; }
+  .subtabs { display:flex; gap:4px; margin:14px 0 10px; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .subtab { background:none; border:0; border-bottom:2px solid transparent; color:var(--muted);
+            padding:8px 12px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .subtab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .subpane { display:none; } .subpane.active { display:block; }
+  .scoreboard { margin-top:10px; }
+  .sb-head { display:flex; justify-content:space-between; font-size:13px; font-weight:700; margin:10px 0 6px; }
+  .sb-radiant { color:var(--accent); } .sb-dire { color:var(--bad); }
+  .m-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .m-table th, .m-table td { padding:7px 8px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  .m-table th { color:var(--muted); font-weight:500; text-align:right; }
+  .m-table th:nth-child(1), .m-table td:nth-child(1),
+  .m-table th:nth-child(2), .m-table td:nth-child(2) { text-align:left; }
+  .hero-cell { font-weight:600; } .hero-cell span { color:var(--muted); font-weight:400; font-size:11px; }
+  .item-chips { display:flex; gap:3px; flex-wrap:wrap; justify-content:flex-end; }
+  .item-chip { background:#222733; border-radius:5px; padding:2px 5px; font-size:10.5px; color:#b9bfcc; }
+  .chart-card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+  .chart-title { font-size:13px; font-weight:600; margin-bottom:6px; }
+  .chart-host { position:relative; width:100%; min-height:200px; }
+  .chart-host svg { display:block; width:100%; overflow:visible; }
+  .chart-legend { display:flex; gap:10px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-top:6px; }
+  .chart-legend i { display:inline-block; width:10px; height:3px; border-radius:2px; margin-right:4px; vertical-align:middle; }
+  .chart-tooltip { position:absolute; pointer-events:none; background:#0f1217; border:1px solid var(--line);
+                   border-radius:6px; padding:6px 8px; font-size:11px; color:var(--text); display:none; z-index:5; white-space:nowrap; }
+  .dmg-bar { display:flex; height:8px; border-radius:4px; overflow:hidden; background:#222733; min-width:120px; }
+  .dmg-bar i { display:block; height:100%; }
+  .dmg-legend { font-size:10.5px; color:var(--muted); margin-top:3px; }
+  .event-list { display:flex; flex-direction:column; gap:2px; }
+  .event-row { display:grid; grid-template-columns:52px 78px minmax(0,1fr); gap:8px; padding:6px 4px;
+               border-bottom:1px solid var(--line); font-size:12px; align-items:baseline; }
+  .ev-time { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .ev-team { font-size:10px; font-weight:700; }
+  .ev-kill { color:#e66767; } .ev-radiant { color:var(--accent); }
+  .ev-desc { color:#cfd5e1; } .ev-desc small { color:var(--muted); }
+  .filter-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .filter-row .chip.active { color:var(--accent); border-color:var(--accent); }
+  .purchase-card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+  .purchase-head { display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:6px; }
+  .purchase-list { display:flex; gap:5px; flex-wrap:wrap; }
+  .purchase-chip { background:#222733; border-radius:5px; padding:2px 6px; font-size:10.5px; color:#b9bfcc; }
+  @media (max-width:900px) {
+    .m-layout { grid-template-columns:1fr; }
+    .m-side { position:static; max-height:none; }
+    .match-list { flex-direction:row; overflow-x:auto; padding-bottom:4px; }
+    .m-item { min-width:180px; flex:0 0 auto; }
+    .m-score { font-size:22px; }
+    .event-row { grid-template-columns:46px 64px minmax(0,1fr); }
+  }
+
   /* AI 匹配助手 */
   .ai-action { display:none; align-items:center; gap:12px; margin:18px 0 8px; flex-wrap:wrap; }
   .ai-hint { color:var(--muted); font-size:12px; }
@@ -227,6 +299,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 
 <nav class="tabs">
   <button class="tab active" data-tab="stats">数据统计</button>
+  <button class="tab" data-tab="match">比赛明细</button>
   <button class="tab" data-tab="roll">Roll 阵容</button>
   <button class="tab" data-tab="rules">规则说明</button>
 </nav>
@@ -238,6 +311,18 @@ TEMPLATE = r"""<!DOCTYPE html>
       <thead id="statsHead"></thead>
       <tbody id="statsBody"></tbody>
     </table>
+  </div>
+</section>
+
+<section id="pane-match" class="pane">
+  <div class="m-layout">
+    <aside class="m-side">
+      <div class="m-side-head">比赛列表 <span id="mMatchCount"></span></div>
+      <div id="matchList" class="match-list"></div>
+    </aside>
+    <main id="matchDetail" class="m-main">
+      <div class="empty">选择一场比赛查看明细</div>
+    </main>
   </div>
 </section>
 
@@ -336,9 +421,11 @@ TEMPLATE = r"""<!DOCTYPE html>
   </div>
 </section>
 
+<script src="data/matches.js?v=__DATA_VER__"></script>
 <script>
 const PLAYERS = __DATA__;
 const MATCH_COUNT = __MATCHES__;
+const MATCHES = (window.MATCH_DATA && window.MATCH_DATA.matches) || [];
 const AI_ENDPOINT = __AI_ENDPOINT__;
 const state = {
   selected: new Set(PLAYERS.map(p => p.name)),
@@ -357,6 +444,7 @@ document.querySelectorAll(".tab").forEach(btn => {
 function showTab(name) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".pane").forEach(p => p.classList.toggle("active", p.id === "pane-" + name));
+  if (name === "match") initMatchTab();
 }
 
 /* ---------- 数据统计 ---------- */
@@ -423,6 +511,312 @@ function renderStats() {
     const cls = c.clsFn ? c.clsFn(p) : (c.cls || "");
     return `<td class="${cls}">${c.fmt(p)}</td>`;
   }).join("") + "</tr>").join("");
+}
+
+/* ---------- 比赛明细 ---------- */
+const matchState = { initialized: false, id: null, sub: "overview", eventFilter: "all", hideConsumables: false, onlyFinished: false };
+const MATCH_SUBS = [
+  ["overview", "总览"], ["economy", "经济"], ["combat", "战斗"],
+  ["items", "装备"], ["events", "事件"]
+];
+const CONSUMABLES = new Set(["tango", "flask", "clarity", "dust", "smoke_of_deceit", "ward_observer", "ward_sentry", "ward_dispenser", "tpscroll", "teleport_scroll", "energy_booster", "bottle", "magic_stick", "magic_wand"]);
+
+function fmtClock(sec) {
+  const neg = sec < 0;
+  let s = Math.abs(Math.round(sec));
+  const m = Math.floor(s / 60);
+  s = s % 60;
+  return (neg ? "-" : "") + m + ":" + String(s).padStart(2, "0");
+}
+function fmtDuration(sec) { return fmtClock(sec); }
+function kfmt(n) {
+  n = Number(n) || 0;
+  if (Math.abs(n) >= 10000) return (n / 1000).toFixed(1) + "K";
+  return String(Math.round(n));
+}
+function teamZh(t) { return t === "radiant" ? "天辉" : "夜魇"; }
+function matchById(id) { return MATCHES.find(m => m.id === id) || null; }
+
+function initMatchTab() {
+  if (matchState.initialized) { if (matchState.id) renderMatchDetail(matchById(matchState.id)); return; }
+  matchState.initialized = true;
+  const q = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+  const hashId = q.get("match");
+  const hashSub = q.get("sub");
+  if (hashSub && MATCH_SUBS.some(x => x[0] === hashSub)) matchState.sub = hashSub;
+  $("mMatchCount").textContent = MATCHES.length + " 场";
+  renderMatchList();
+  const first = hashId && matchById(hashId) ? hashId : (MATCHES[0] && MATCHES[0].id);
+  if (first) selectMatch(first, false);
+}
+
+function renderMatchList() {
+  $("matchList").innerHTML = MATCHES.map(m => {
+    const win = m.winner === "radiant" ? "天辉胜" : "夜魇胜";
+    return `<button class="m-item ${m.id === matchState.id ? "active" : ""}" data-id="${m.id}">
+      <div class="mi-top"><span class="${m.radiant_win ? "mi-win" : "mi-loss"}">${win}</span>
+        <span>${m.score.radiant} - ${m.score.dire}</span></div>
+      <div class="mi-sub">${esc(m.date)} · ${fmtDuration(m.duration)} · ${esc(m.mode)}</div>
+    </button>`;
+  }).join("");
+  document.querySelectorAll("#matchList .m-item").forEach(btn => {
+    btn.onclick = () => selectMatch(btn.dataset.id, true);
+  });
+}
+
+function selectMatch(id, updateHash) {
+  if (!matchById(id)) return;
+  matchState.id = id;
+  matchState.eventFilter = "all";
+  renderMatchList();
+  renderMatchDetail(matchById(id));
+  if (updateHash) {
+    try { history.replaceState(null, "", "#match=" + id + "&sub=" + matchState.sub); }
+    catch (e) { location.hash = "match=" + id + "&sub=" + matchState.sub; }
+  }
+}
+
+function renderMatchDetail(m) {
+  if (!m) return;
+  const win = m.winner === "radiant" ? "天辉胜利" : "夜魇胜利";
+  const kpi = (side) => {
+    const t = m.teams[side];
+    return `<div class="kpis">
+      <div class="kpi"><div class="k">击杀</div><div class="v">${t.kills}</div></div>
+      <div class="kpi"><div class="k">死亡</div><div class="v">${t.deaths}</div></div>
+      <div class="kpi"><div class="k">助攻</div><div class="v">${t.assists}</div></div>
+      <div class="kpi"><div class="k">净资产</div><div class="v">${kfmt(t.net_worth)}</div></div>
+      <div class="kpi"><div class="k">英雄伤害</div><div class="v">${kfmt(t.hero_damage)}</div></div>
+      <div class="kpi"><div class="k">推塔伤害</div><div class="v">${kfmt(t.tower_damage)}</div></div>
+    </div>`;
+  };
+  $("matchDetail").innerHTML = `
+    <div class="m-head">
+      <div class="m-title">
+        <span class="m-score">${m.score.radiant} <span style="color:var(--muted);font-size:16px">-</span> ${m.score.dire}</span>
+        <b class="${m.radiant_win ? "mi-win" : "mi-loss"}">${win}</b>
+        <span class="m-meta">${esc(m.date)} · ${fmtDuration(m.duration)} · ${esc(m.mode)} · #${m.id}</span>
+      </div>
+      <div style="margin-top:12px"><div class="sb-head sb-radiant">天辉</div>${kpi("radiant")}
+        <div class="sb-head sb-dire">夜魇</div>${kpi("dire")}</div>
+    </div>
+    <div class="subtabs" id="mSubtabs">${MATCH_SUBS.map(([k, label]) =>
+      `<button class="subtab ${k === matchState.sub ? "active" : ""}" data-sub="${k}">${label}</button>`).join("")}</div>
+    <div id="mSub"></div>`;
+  document.querySelectorAll("#mSubtabs .subtab").forEach(btn => {
+    btn.onclick = () => {
+      matchState.sub = btn.dataset.sub;
+      document.querySelectorAll("#mSubtabs .subtab").forEach(b => b.classList.toggle("active", b === btn));
+      renderSub(m);
+      try { history.replaceState(null, "", "#match=" + m.id + "&sub=" + matchState.sub); } catch (e) {}
+    };
+  });
+  renderSub(m);
+}
+
+function renderSub(m) {
+  const host = $("mSub");
+  if (!host) return;
+  host.innerHTML = `<div class="subpane active" id="mSubPane"></div>`;
+  const pane = $("mSubPane");
+  if (matchState.sub === "economy") renderEconomy(pane, m);
+  else if (matchState.sub === "combat") renderCombat(pane, m);
+  else if (matchState.sub === "items") renderItems(pane, m);
+  else if (matchState.sub === "events") renderEvents(pane, m);
+  else renderOverview(pane, m);
+}
+
+function scoreboardTable(team, m) {
+  const players = m.players.filter(p => p.team === team).sort((a, b) => b.net_worth - a.net_worth);
+  return `<div class="sb-head ${team === "radiant" ? "sb-radiant" : "sb-dire"}">${teamZh(team)}</div>
+  <div class="table-wrap"><table class="m-table">
+    <thead><tr><th>英雄</th><th>玩家</th><th>等级</th><th>K/D/A</th><th>净资产</th><th>GPM/XPM</th><th>正/反</th><th>装备</th></tr></thead>
+    <tbody>${players.map(p => `<tr>
+      <td class="hero-cell">${esc(p.hero_zh)}<span><br>${esc(p.hero)}</span></td>
+      <td>${esc(p.name)}</td><td>${p.level}</td><td>${p.kills}/${p.deaths}/${p.assists}</td>
+      <td>${kfmt(p.net_worth)}</td><td>${p.gpm}/${p.xpm}</td><td>${p.last_hits}/${p.denies}</td>
+      <td><div class="item-chips">${p.items.map(i => `<span class="item-chip" title="${esc(i.key)}">${esc(i.zh)}</span>`).join("")}</div></td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+
+function renderOverview(host, m) {
+  host.innerHTML = scoreboardTable("radiant", m) + scoreboardTable("dire", m);
+}
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs || {}) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function drawLineChart(host, times, series, opts) {
+  host.innerHTML = "";
+  if (!times || !times.length || !series || !series.length) {
+    host.innerHTML = '<div class="empty">暂无数据</div>';
+    return;
+  }
+  const W = Math.max(320, host.clientWidth || 720);
+  const H = opts.height || 210;
+  const pad = { l: 52, r: 18, t: 12, b: 24 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  let vals = [];
+  series.forEach(s => s.values.forEach(v => vals.push(Number(v) || 0)));
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (opts.zero) { min = Math.min(min, 0); max = Math.max(max, 0); }
+  if (min === max) { min -= 1; max += 1; }
+  const padY = (max - min) * 0.08;
+  min -= padY; max += padY;
+  const x = i => pad.l + (times.length <= 1 ? 0 : i / (times.length - 1) * pw);
+  const y = v => pad.t + (max - v) / (max - min) * ph;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opts.title || "折线图" });
+  for (let i = 0; i <= 4; i++) {
+    const v = min + (max - min) * i / 4;
+    svg.appendChild(svgEl("line", { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), stroke: "#2c2c2a", "stroke-width": 1 }));
+    const t = svgEl("text", { x: pad.l - 6, y: y(v) + 3, fill: "#898781", "font-size": 10, "text-anchor": "end" });
+    t.textContent = kfmt(v); svg.appendChild(t);
+  }
+  if (opts.zero) {
+    svg.appendChild(svgEl("line", { x1: pad.l, x2: W - pad.r, y1: y(0), y2: y(0), stroke: "#4a4a46", "stroke-width": 1 }));
+  }
+  const labels = [0, Math.floor((times.length - 1) / 2), times.length - 1];
+  labels.forEach(i => {
+    const t = svgEl("text", { x: x(i), y: H - 6, fill: "#898781", "font-size": 10,
+      "text-anchor": i === 0 ? "start" : (i === times.length - 1 ? "end" : "middle") });
+    t.textContent = fmtClock(times[i]); svg.appendChild(t);
+  });
+  const colors = opts.colors || ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"];
+  series.forEach((s, si) => {
+    const pts = s.values.map((v, i) => `${x(i)},${y(Number(v) || 0)}`).join(" ");
+    svg.appendChild(svgEl("polyline", { points: pts, fill: "none",
+      stroke: s.color || colors[si % colors.length], "stroke-width": 2, "stroke-linejoin": "round" }));
+  });
+  host.appendChild(svg);
+  if (series.length > 1 || opts.legend) {
+    const lg = document.createElement("div");
+    lg.className = "chart-legend";
+    lg.innerHTML = series.map((s, si) => `<span><i style="background:${s.color || colors[si % colors.length]}"></i>${esc(s.name)}</span>`).join("");
+    host.appendChild(lg);
+  }
+  const tip = document.createElement("div");
+  tip.className = "chart-tooltip";
+  host.appendChild(tip);
+  const line = svgEl("line", { x1: 0, x2: 0, y1: pad.t, y2: pad.t + ph, stroke: "#5b6070", "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 });
+  svg.appendChild(line);
+  svg.addEventListener("mousemove", ev => {
+    const rect = svg.getBoundingClientRect();
+    const px = (ev.clientX - rect.left) * (W / rect.width);
+    let idx = Math.round((px - pad.l) / pw * (times.length - 1));
+    idx = Math.max(0, Math.min(times.length - 1, idx));
+    line.setAttribute("x1", x(idx)); line.setAttribute("x2", x(idx)); line.setAttribute("opacity", 1);
+    tip.style.display = "block";
+    tip.style.left = Math.min(W - 160, x(idx) + 10) + "px";
+    tip.style.top = "6px";
+    tip.innerHTML = `<b>${fmtClock(times[idx])}</b><br>` +
+      series.map((s, si) => `<span style="color:${s.color || colors[si % colors.length]}">●</span> ${esc(s.name)}: ${kfmt(s.values[idx])}`).join("<br>");
+  });
+  svg.addEventListener("mouseleave", () => { line.setAttribute("opacity", 0); tip.style.display = "none"; });
+}
+
+function renderEconomy(host, m) {
+  const ec = m.economy;
+  if (!ec || !ec.times || !ec.times.length) {
+    host.innerHTML = '<div class="empty">该场比赛没有经济曲线数据（可能未重新解析）。</div>';
+    return;
+  }
+  const diff = (a, b) => a.map((v, i) => (Number(v) || 0) - (Number(b[i]) || 0));
+  const goldDiff = diff(ec.team.radiant.gold, ec.team.dire.gold);
+  const xpDiff = diff(ec.team.radiant.xp, ec.team.dire.xp);
+  host.innerHTML = `
+    <div class="chart-card"><div class="chart-title">团队经济差（天辉 − 夜魇）</div><div class="chart-host" id="chartGold"></div></div>
+    <div class="chart-card"><div class="chart-title">团队经验差（天辉 − 夜魇）</div><div class="chart-host" id="chartXp"></div></div>
+    <div class="chart-card"><div class="chart-title">天辉玩家净资产</div><div class="chart-host" id="chartNwR"></div></div>
+    <div class="chart-card"><div class="chart-title">夜魇玩家净资产</div><div class="chart-host" id="chartNwD"></div></div>
+    <div class="why">数据来源：${ec.source === "snapshot" ? "每游戏分钟采样" : "由金钱/经验日志估算"}${ec.approx ? "（近似）" : ""}</div>`;
+  drawLineChart($("chartGold"), ec.times, [{ name: "经济差", values: goldDiff, color: "#199e70" }], { zero: true, legend: false, title: "团队经济差" });
+  drawLineChart($("chartXp"), ec.times, [{ name: "经验差", values: xpDiff, color: "#3987e5" }], { zero: true, legend: false, title: "团队经验差" });
+  const playerSeries = (team, colors) => m.players.filter(p => p.team === team).map((p, i) => {
+    const ep = (ec.players || []).find(x => x.pid === p.pid);
+    return { name: p.hero_zh || p.hero, values: ep ? ep.net_worth : [], color: colors[i % colors.length] };
+  });
+  const colors = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"];
+  drawLineChart($("chartNwR"), ec.times, playerSeries("radiant", colors), { height: 200, legend: true, title: "天辉玩家净资产" });
+  drawLineChart($("chartNwD"), ec.times, playerSeries("dire", colors), { height: 200, legend: true, title: "夜魇玩家净资产" });
+}
+
+function damageBar(p, key) {
+  const d = (p.damage && p.damage[key]) || {};
+  const vals = [["physical", "物理", "#3987e5"], ["magical", "魔法", "#d95926"], ["pure", "纯粹", "#199e70"], ["other", "其他", "#898781"]];
+  const total = vals.reduce((s, v) => s + (Number(d[v[0]]) || 0), 0) || 1;
+  return `<div class="dmg-bar">${vals.map(v => {
+    const pct = (Number(d[v[0]]) || 0) / total * 100;
+    return pct > 0 ? `<i style="width:${pct}%;background:${v[2]}" title="${v[1]} ${kfmt(d[v[0]])}"></i>` : "";
+  }).join("")}</div><div class="dmg-legend">${vals.map(v => `${v[1]} ${kfmt(d[v[0]])}`).join(" · ")}</div>`;
+}
+
+function renderCombat(host, m) {
+  const table = (team) => {
+    const ps = m.players.filter(p => p.team === team).sort((a, b) => b.hero_damage - a.hero_damage);
+    return `<div class="sb-head ${team === "radiant" ? "sb-radiant" : "sb-dire"}">${teamZh(team)}</div>
+    <div class="table-wrap"><table class="m-table">
+      <thead><tr><th>英雄</th><th>造成伤害</th><th>承受伤害</th><th>推塔伤害</th><th>眩晕</th><th>治疗</th><th>插眼/反眼</th></tr></thead>
+      <tbody>${ps.map(p => `<tr><td class="hero-cell">${esc(p.hero_zh)}<span><br>${esc(p.name)}</span></td>
+        <td>${kfmt(p.hero_damage)}${damageBar(p, "dealt")}</td>
+        <td>${kfmt(p.hero_damage_taken)}${damageBar(p, "taken")}</td>
+        <td>${kfmt(p.tower_damage)}</td><td>${Number(p.stuns).toFixed(1)}s</td>
+        <td>${kfmt(p.healing)}</td><td>${p.wards_placed}/${p.wards_destroyed}</td></tr>`).join("")}</tbody>
+    </table></div>`;
+  };
+  host.innerHTML = table("radiant") + table("dire");
+}
+
+function renderItems(host, m) {
+  const cards = m.players.map(p => {
+    let rows = (m.purchases || []).filter(x => x.pid === p.pid);
+    if (matchState.hideConsumables) rows = rows.filter(x => !CONSUMABLES.has(x.item));
+    if (matchState.onlyFinished) rows = rows.filter(x => !x.recipe && x.cost >= 2000);
+    rows.sort((a, b) => a.t - b.t);
+    return `<div class="purchase-card">
+      <div class="purchase-head"><span>${esc(p.hero_zh)} · ${esc(p.name)}</span>
+        <span class="item-chips">${p.items.map(i => `<span class="item-chip">${esc(i.zh)}</span>`).join("")}</span></div>
+      <div class="purchase-list">${rows.map(x => `<span class="purchase-chip" title="${esc(x.item)}">[${fmtClock(x.t)}] ${esc(x.item_zh)} ${x.cost || ""}</span>`).join("") || '<span class="why">没有购买记录</span>'}</div>
+    </div>`;
+  }).join("");
+  host.innerHTML = `<div class="filter-row">
+    <label class="chip"><input type="checkbox" id="hideCons" ${matchState.hideConsumables ? "checked" : ""}> 隐藏消耗品</label>
+    <label class="chip"><input type="checkbox" id="onlyFin" ${matchState.onlyFinished ? "checked" : ""}> 只看成装</label>
+  </div>${cards}`;
+  $("hideCons").onchange = e => { matchState.hideConsumables = e.target.checked; renderItems(host, m); };
+  $("onlyFin").onchange = e => { matchState.onlyFinished = e.target.checked; renderItems(host, m); };
+}
+
+function renderEvents(host, m) {
+  const items = [];
+  (m.kills || []).forEach(k => items.push({ t: k.t, kind: "kill", d: k }));
+  (m.objectives || []).forEach(o => items.push({ t: o.t, kind: "objective", d: o }));
+  items.sort((a, b) => a.t - b.t);
+  const filters = [["all", "全部"], ["kill", "击杀"], ["tower", "防御塔"], ["rax", "兵营"], ["roshan", "肉山"], ["aegis", "不朽盾"], ["other", "其他"]];
+  const filtered = items.filter(x => matchState.eventFilter === "all" ||
+    (matchState.eventFilter === "kill" ? x.kind === "kill" : (x.kind === "objective" && x.d.kind === matchState.eventFilter)));
+  const rows = filtered.map(x => {
+    if (x.kind === "kill") {
+      const k = x.d;
+      const team = k.team === "radiant" ? "ev-radiant" : "ev-kill";
+      return `<div class="event-row"><span class="ev-time">${fmtClock(k.t)}</span>
+        <span class="ev-team ${team}">${teamZh(k.team)}</span>
+        <span class="ev-desc">${k.first_blood ? '<b style="color:#ffcc66">一血</b> ' : ""}${esc(k.killer_zh)} → ${esc(k.victim_zh)}
+        ${k.assists.length ? `<small>助攻：${k.assists.map(a => esc(a.zh)).join("、")}</small>` : ""}</span></div>`;
+    }
+    const o = x.d;
+    return `<div class="event-row"><span class="ev-time">${fmtClock(o.t)}</span>
+      <span class="ev-team ${o.team === "radiant" ? "ev-radiant" : "ev-kill"}">${teamZh(o.team)}</span>
+      <span class="ev-desc">${esc(o.label)}${o.killer_zh ? ` <small>${esc(o.killer_zh)}</small>` : ""}</span></div>`;
+  }).join("");
+  host.innerHTML = `<div class="filter-row">${filters.map(([k, label]) =>
+    `<button class="chip ${matchState.eventFilter === k ? "active" : ""}" data-filter="${k}">${label}</button>`).join("")}</div>
+    <div class="event-list">${rows || '<div class="empty">没有事件</div>'}</div>`;
+  document.querySelectorAll("#mSubPane .filter-row .chip").forEach(btn => {
+    btn.onclick = () => { matchState.eventFilter = btn.dataset.filter; renderEvents(host, m); };
+  });
 }
 
 /* ---------- 选人 ---------- */
@@ -636,6 +1030,9 @@ function updateAIAction() {
   if (!AI_ENDPOINT) {
     btn.disabled = true;
     $("aiHint").textContent = "AI 助手尚未部署，请先运行一键部署 AI";
+  } else if (location.protocol === "file:") {
+    btn.disabled = true;
+    $("aiHint").textContent = "本地文件模式无法使用 AI，请打开线上地址";
   } else {
     btn.disabled = false;
     $("aiHint").textContent = "在已 roll 的结果上和 AI 讨论、微调";
@@ -946,6 +1343,30 @@ document.querySelectorAll(".chip").forEach(c => {
 renderStats();
 renderPlayers();
 
+window.addEventListener("hashchange", () => {
+  if (!location.hash.startsWith("#match=")) return;
+  const q = new URLSearchParams(location.hash.slice(1));
+  const id = q.get("match");
+  if (!id) return;
+  showTab("match");
+  const sub = q.get("sub");
+  if (sub && MATCH_SUBS.some(x => x[0] === sub)) matchState.sub = sub;
+  if (id !== matchState.id) selectMatch(id, false);
+  else if (matchState.id) renderMatchDetail(matchById(matchState.id));
+});
+
+let mResizeTimer = null;
+window.addEventListener("resize", () => {
+  if (!$("pane-match").classList.contains("active") || !matchState.id) return;
+  clearTimeout(mResizeTimer);
+  mResizeTimer = setTimeout(() => renderSub(matchById(matchState.id)), 180);
+});
+
+if (location.hash.startsWith("#match=")) {
+  showTab("match");
+  initMatchTab();
+}
+
 // 预览模式：index.html?demo=1 自动切到 Roll 并生成 3 套
 if (new URLSearchParams(location.search).get("demo")) {
   showTab("roll");
@@ -962,6 +1383,7 @@ if (new URLSearchParams(location.search).get("demo")) {
 
 
 def main():
+    make_match_data.build()
     players, match_count = collect_players()
     ai_endpoint = ""
     try:
@@ -969,12 +1391,15 @@ def main():
             ai_endpoint = json.load(fp).get("ai_endpoint", "")
     except (OSError, json.JSONDecodeError):
         pass
+    data_path = os.path.join(DOCS_DIR, "data", "matches.js")
+    data_ver = str(int(os.path.getmtime(data_path))) if os.path.isfile(data_path) else "0"
 
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(players, ensure_ascii=False))
             .replace("__MATCHES__", str(match_count))
             .replace("__TIME__", datetime.now().strftime("%Y-%m-%d %H:%M"))
-            .replace("__AI_ENDPOINT__", json.dumps(ai_endpoint)))
+            .replace("__AI_ENDPOINT__", json.dumps(ai_endpoint))
+            .replace("__DATA_VER__", data_ver))
     os.makedirs(DOCS_DIR, exist_ok=True)
     out = os.path.join(DOCS_DIR, "index.html")
     with open(out, "w", encoding="utf-8") as fp:

@@ -11,6 +11,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -71,6 +72,16 @@ def main():
     print("2/4 生成统计与网页…")
     for script in ("stats.py", "make_web.py"):
         subprocess.run([sys.executable, os.path.join(ROOT, script)], cwd=ROOT, check=True)
+
+    data_file = os.path.join(ROOT, "docs", "data", "matches.js")
+    if not os.path.isfile(data_file) or os.path.getsize(data_file) < 100:
+        print("比赛明细数据未生成，终止发布")
+        return 1
+    with open(data_file, encoding="utf-8") as fp:
+        data_text = fp.read()
+    if "steamid" in data_text or re.search(r"7656119\d{10}", data_text):
+        print("检测到 SteamID 泄露，终止发布")
+        return 1
 
     tcb = shutil.which("tcb")
     if not tcb:

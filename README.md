@@ -30,7 +30,10 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 
 ```
 replay/
-├── stats.py / balance.py / roll.py / make_web.py
+├── stats.py / balance.py / roll.py / make_web.py / make_match_data.py
+├── reparse_known.py           # 安全重解析已有比赛
+├── make_name_maps.py          # 中文装备/技能名映射
+├── item_names_zh.json / item_aliases.json / item_ids.json
 ├── deploy_tcb.py              # 腾讯云静态发布（发布前自动扫描新录像）
 ├── scan_new.py                # 扫描 replays 目录，解析新增练习赛
 ├── deploy_ai.py               # 部署 AI 云函数
@@ -43,6 +46,7 @@ replay/
 ├── mmr.json                   # 玩家 MMR 登记（默认空 = 未登记）
 ├── docs/index.html            # 公开网页
 ├── docs/vendor/               # marked + DOMPurify（本地托管）
+├── docs/data/matches.js       # 比赛明细数据（公开，无 SteamID）
 ├── mantatool/                 # Go 解析器源码与 parse.exe
 ├── dem/                       # .dem 重放（git 忽略）
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
@@ -56,7 +60,10 @@ replay/
 | `stats.py` | 汇总玩家数据（胜率、KDA、GPM/XPM、伤害/经济等） |
 | `balance.py` | 计算 Elo + 表现分，枚举并排序 5v5 分法 |
 | `roll.py` | 规则化 roll（R1–R5），只在合格方案里随机 |
-| `make_web.py` | 生成三 Tab 网页到 `docs/index.html` |
+| `make_web.py` | 生成四 Tab 网页到 `docs/index.html` |
+| `make_match_data.py` | 从比赛 JSON 生成 `docs/data/matches.js` |
+| `reparse_known.py` | 只重解析已有比赛，补齐事件/经济/装备时间线 |
+| `make_name_maps.py` | 从本地 VPK 生成中文装备/技能名 |
 | `deploy_tcb.py` | 扫描新录像 → 生成 → 上传到腾讯云 CloudBase |
 | `scan_new.py` | 扫描 `replays` 目录，解析新增练习赛并写入 `json/` |
 | `deploy_ai.py` | 部署 `roll-ai` 云函数，写入 AI 端点并重新发布网页 |
@@ -104,6 +111,25 @@ https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/
 
 默认域名不需要备案；绑定自己的域名需要 ICP 备案。
 
+## 比赛明细
+
+第四个 Tab「比赛明细」提供单场详情：
+
+- 比赛列表 + 详情：胜负、比分、时长、模式
+- 总览：双方 KPI、记分板、英雄中文名、KDA、净资产、GPM/XPM、正反补、装备
+- 经济：团队经济差/经验差、双方玩家净资产曲线
+- 战斗：造成/承受伤害、伤害类型构成、推塔、眩晕、治疗、眼位
+- 装备：终局装备 + 购买时间线，可过滤消耗品/只看成装
+- 事件：击杀、推塔、兵营、肉山、不朽盾时间线
+
+数据由 `make_match_data.py` 生成到 `docs/data/matches.js`，发布时自动上传。页面只包含公开字段，**不包含 SteamID**。
+
+扩展解析器或修改事件口径后，可重解析已有比赛：
+
+```bash
+python reparse_known.py --all-known
+```
+
 ## AI 匹配助手
 
 Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后可以：
@@ -134,6 +160,8 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 python stats.py          # 汇总统计
 python make_web.py       # 生成 docs/index.html
 python scan_new.py       # 手动扫描新录像
+python reparse_known.py --all-known  # 重解析已有比赛
+python make_name_maps.py # 更新中文装备/技能名
 python deploy_tcb.py     # 发布到腾讯云（会先自动扫描）
 python deploy_ai.py      # 部署/更新 AI 云函数并重新发布
 python roll.py "A" ... "J"
@@ -192,12 +220,12 @@ mantatool\parse.exe "D:\...\replays\905xxxxxxx.dem"
 - `manta/`：上游解析库
 - `aliases.json` 中只保留玩家名映射，不含 SteamID
 
-公开的只有 `docs/index.html`，其中是玩家名、评分和统计，不含 SteamID。
+公开的只有 `docs/index.html` 和 `docs/data/matches.js`，其中是玩家名、评分、比赛事件和统计，**不含 SteamID**。发布脚本会在上传前检查 `matches.js`，发现 SteamID 会终止发布。
 
 AI 对话时，当前 10 人的玩家名、评分和统计会发送给 DeepSeek；不会发送 SteamID。DeepSeek Key 只保存在 CloudBase 云函数环境变量中，不进入页面和 git。
 
 ## 已知限制
 
-- 目前样本较少（8 场），评分区分度有限
+- 目前样本仍不算多（14 场），评分区分度有限
 - 位置（核心/酱油）按每场净资产排名推断，非人工标注
 - 玩家名含特殊字符时，脚本支持模糊匹配
