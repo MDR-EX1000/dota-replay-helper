@@ -21,10 +21,7 @@ JSON_DIR = os.path.join(ROOT, "json")
 STATE_PATH = os.path.join(ROOT, "scan_state.json")
 PARSE_EXE = os.path.join(ROOT, "mantatool", "parse.exe")
 
-DEFAULT_REPLAY = os.path.join(
-    r"D:\Program Files (x86)\Steam\steamapps\common\dota 2 beta",
-    "game", "dota", "replays",
-)
+DEFAULT_REPLAY = os.path.join(ROOT, "dem")
 MIN_SIZE = 5 * 1024 * 1024
 
 

@@ -95,7 +95,7 @@ replay/
 3. 重新生成统计和网页
 4. 上传到 CloudBase 静态托管
 
-重放目录默认是 `D:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\replays`，可用环境变量 `DOTA_REPLAY_DIR` 覆盖。
+重放目录默认是 `C:/Users/admin/Desktop/replay/dem`（唯一解析来源），可用环境变量 `DOTA_REPLAY_DIR` 覆盖。
 
 前置条件：
 

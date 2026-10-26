@@ -18,10 +18,7 @@ import sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 JSON_DIR = os.path.join(ROOT, "json")
 PARSE_EXE = os.path.join(ROOT, "mantatool", "parse.exe")
-DEFAULT_REPLAY = os.path.join(
-    r"D:\Program Files (x86)\Steam\steamapps\common\dota 2 beta",
-    "game", "dota", "replays",
-)
+DEFAULT_REPLAY = os.path.join(ROOT, "dem")
 
 
 def known_ids():
