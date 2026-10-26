@@ -1478,6 +1478,12 @@ async function uploadAndParse(file, code) {
         body: blob,
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data.code === "EXISTS") {
+        upSetProgress(100);
+        upLog(data.error, "ok");
+        upStatus("已存在，跳过上传");
+        return;
+      }
       if (!res.ok) throw new Error(data.error || ("上传失败 HTTP " + res.status));
       upSetProgress((i + 1) / total * 60);
       upStatus("上传中 " + (i + 1) + "/" + total + " · " + Math.round((i + 1) / total * 100) + "%");
@@ -1511,6 +1517,11 @@ async function uploadAndParse(file, code) {
       upStatus(data.state === "done" ? "完成" : (data.stage || "处理中"));
       if (data.state === "done") {
         const r = data.result || {};
+        if (r.skipped) {
+          upLog("比赛 " + r.matchId + " 已存在，未重复解析", "ok");
+          upStatus("已存在，无需重复上传");
+          break;
+        }
         upLog("比赛 " + r.matchId + " 解析成功，当前共 " + r.matchCount + " 场", "ok");
         upStatus("完成。3 秒后自动刷新页面…");
         setTimeout(() => {
