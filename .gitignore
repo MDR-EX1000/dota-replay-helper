@@ -37,3 +37,16 @@ roll_*.txt
 
 # 录像扫描状态（本地）
 scan_state.json
+
+# CloudBase 环境 API Key（绝不提交）
+cloudbase.apikey
+
+# 云托管构建目录（含 secrets.json）
+cloudrun_build/
+cloudrun_test/
+
+# 上传口令（可选，默认 zgnb）
+upload_code.txt
+
+# 云端解析服务的脱敏数据（运行时生成）
+state/

@@ -2,10 +2,12 @@
 """
 生成对黑分组动态网页：Desktop/replay/index.html
 
-三个 Tab:
+五个 Tab:
     1. 数据统计   —— 玩家汇总表（胜率 / KDA / GPM / XPM / 伤害经济比等）
-    2. Roll 阵容  —— 勾选 10 人，一次 roll 出 3 套阵容，每套附规则审计
-    3. 规则说明   —— 评分口径、roll 规则、放宽顺序、可信依据
+    2. 比赛明细   —— 单场经济、战斗、装备与事件
+    3. Roll 阵容  —— 勾选 10 人，一次 roll 出 3 套阵容，每套附规则审计
+    4. 上传录像   —— 网页上传 .dem，云端解析并自动发布
+    5. 规则说明   —— 评分口径、roll 规则、放宽顺序、可信依据
 
 数据来自 balance.build_ratings() + stats.aggregate()。
 每次解析新比赛后重新运行本脚本即可刷新页面。
@@ -282,6 +284,26 @@ TEMPLATE = r"""<!DOCTYPE html>
   .match-card .mc-actions { margin-top:9px; display:flex; gap:8px; }
   .adopted-banner { color:var(--accent); font-size:12px; margin-bottom:8px; }
 
+  .upload-box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+                padding:16px 18px; max-width:720px; }
+  .upload-hint { color:var(--muted); font-size:12.5px; line-height:1.7; margin:0 0 14px; }
+  .upload-field { display:flex; align-items:center; gap:10px; font-size:12.5px;
+                  color:var(--muted); margin-bottom:12px; }
+  .upload-field input { background:#11141a; color:var(--text); border:1px solid var(--line);
+                        border-radius:8px; padding:7px 10px; font-size:13px; outline:none; width:200px; }
+  .upload-field input:focus { border-color:var(--accent); }
+  .upload-drop { display:flex; align-items:center; justify-content:center; border:1px dashed #3a4152;
+                 border-radius:10px; padding:22px; cursor:pointer; color:var(--muted);
+                 font-size:13px; margin-bottom:12px; }
+  .upload-drop:hover { border-color:var(--accent); color:var(--text); }
+  .upload-drop input { display:none; }
+  .up-progress { height:8px; background:#1b1f28; border-radius:999px; overflow:hidden; margin:12px 0 8px; }
+  .up-bar { height:100%; width:0; background:var(--accent); transition:width .2s; }
+  .up-status { font-size:12.5px; color:var(--text); min-height:18px; margin-bottom:6px; }
+  .up-log { margin:8px 0 0; padding-left:18px; color:var(--muted); font-size:12px; line-height:1.8; }
+  .up-log .err { color:#e06666; }
+  .up-log .ok { color:#4ec9a5; }
+
   @media (max-width:640px) {
     body { padding:0 14px 60px; }
     .bar { margin:18px -14px 0; padding:12px 14px; flex-wrap:wrap; }
@@ -301,6 +323,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   <button class="tab active" data-tab="stats">数据统计</button>
   <button class="tab" data-tab="match">比赛明细</button>
   <button class="tab" data-tab="roll">Roll 阵容</button>
+  <button class="tab" data-tab="upload">上传录像</button>
   <button class="tab" data-tab="rules">规则说明</button>
 </nav>
 
@@ -343,6 +366,32 @@ TEMPLATE = r"""<!DOCTYPE html>
     <button class="ghost" id="clear">清空</button>
     <button class="ghost" id="top10">选前 10</button>
     <button class="primary" id="roll" disabled>Roll</button>
+  </div>
+</section>
+
+<section id="pane-upload" class="pane">
+  <h2>上传录像（.dem）</h2>
+  <div class="upload-box">
+    <p class="upload-hint">
+      从 Dota 2 客户端「观看 → 已下载的重放」找到比赛，文件名就是比赛 ID（例如
+      <code>9061520546.dem</code>）。上传后会自动解析、更新统计并重新发布本页，无需再动本地脚本。
+    </p>
+
+    <label class="upload-field">
+      <span>上传口令</span>
+      <input id="upCode" type="password" placeholder="输入口令" autocomplete="off">
+    </label>
+
+    <label class="upload-drop" id="upDrop">
+      <input id="upFile" type="file" accept=".dem">
+      <span id="upFileName">点击选择 .dem 文件</span>
+    </label>
+
+    <button class="primary" id="upStart" disabled>开始上传并解析</button>
+
+    <div class="up-progress" id="upBarWrap" hidden><div class="up-bar" id="upBar"></div></div>
+    <div class="up-status" id="upStatus"></div>
+    <ol class="up-log" id="upLog"></ol>
   </div>
 </section>
 
@@ -427,6 +476,7 @@ const PLAYERS = __DATA__;
 const MATCH_COUNT = __MATCHES__;
 const MATCHES = (window.MATCH_DATA && window.MATCH_DATA.matches) || [];
 const AI_ENDPOINT = __AI_ENDPOINT__;
+const UPLOAD_ENDPOINT = __UPLOAD_ENDPOINT__;
 const state = {
   selected: new Set(PLAYERS.map(p => p.name)),
   results: [],
@@ -1340,6 +1390,148 @@ $("aiInput").addEventListener("keydown", (e) => {
 document.querySelectorAll(".chip").forEach(c => {
   c.onclick = () => sendAI(c.dataset.prompt);
 });
+
+/* ---------- 上传录像 ---------- */
+const UP_CHUNK = 4 * 1024 * 1024;
+const upState = { file: null, busy: false };
+
+function upLog(text, cls) {
+  const li = document.createElement("li");
+  if (cls) li.className = cls;
+  li.textContent = text;
+  $("upLog").appendChild(li);
+}
+
+function upSetProgress(pct) {
+  $("upBarWrap").hidden = false;
+  $("upBar").style.width = Math.max(0, Math.min(100, pct)) + "%";
+}
+
+function upStatus(text) { $("upStatus").textContent = text; }
+
+function initUploadTab() {
+  const fileInput = $("upFile");
+  const startBtn = $("upStart");
+  const saved = sessionStorage.getItem("uploadCode");
+  if (saved) $("upCode").value = saved;
+
+  if (!UPLOAD_ENDPOINT) {
+    upStatus("上传服务尚未部署，暂时不可用。");
+    startBtn.disabled = true;
+    return;
+  }
+
+  $("upDrop").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    if (!/^\d{7,12}\.dem$/i.test(f.name)) {
+      upLog("文件名必须是比赛 ID，例如 9061520546.dem", "err");
+      upState.file = null;
+      $("upFileName").textContent = "点击选择 .dem 文件";
+      startBtn.disabled = true;
+      return;
+    }
+    if (f.size > 300 * 1024 * 1024) {
+      upLog("文件超过 300MB", "err");
+      upState.file = null;
+      startBtn.disabled = true;
+      return;
+    }
+    upState.file = f;
+    $("upFileName").textContent = f.name + " · " + (f.size / 1024 / 1024).toFixed(1) + " MB";
+    startBtn.disabled = false;
+  });
+
+  startBtn.addEventListener("click", () => {
+    if (upState.busy) return;
+    const code = $("upCode").value.trim();
+    if (!code) { upLog("请先输入上传口令", "err"); return; }
+    if (!upState.file) { upLog("请先选择 .dem 文件", "err"); return; }
+    sessionStorage.setItem("uploadCode", code);
+    uploadAndParse(upState.file, code);
+  });
+}
+
+async function uploadAndParse(file, code) {
+  upState.busy = true;
+  $("upStart").disabled = true;
+  $("upLog").innerHTML = "";
+  try {
+    const uploadId = [...crypto.getRandomValues(new Uint8Array(16))]
+      .map(b => b.toString(16).padStart(2, "0")).join("");
+    const total = Math.ceil(file.size / UP_CHUNK);
+    upLog("开始上传 " + total + " 个分片…");
+
+    for (let i = 0; i < total; i++) {
+      const blob = file.slice(i * UP_CHUNK, Math.min(file.size, (i + 1) * UP_CHUNK));
+      const res = await fetch(UPLOAD_ENDPOINT + "/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "x-upload-code": code,
+          "x-upload-id": uploadId,
+          "x-chunk-index": String(i),
+          "x-chunk-total": String(total),
+          "x-file-name": file.name,
+        },
+        body: blob,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ("上传失败 HTTP " + res.status));
+      upSetProgress((i + 1) / total * 60);
+      upStatus("上传中 " + (i + 1) + "/" + total + " · " + Math.round((i + 1) / total * 100) + "%");
+    }
+
+    upSetProgress(62);
+    upStatus("上传完成，开始解析…");
+    const start = await fetch(UPLOAD_ENDPOINT + "/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-upload-code": code },
+      body: JSON.stringify({ uploadId }),
+    });
+    const startData = await start.json().catch(() => ({}));
+    if (!start.ok) throw new Error(startData.error || "无法开始解析");
+    upLog("任务已创建：" + startData.jobId);
+
+    const jobId = startData.jobId;
+    const t0 = Date.now();
+    let lastStage = "";
+    while (true) {
+      if (Date.now() - t0 > 10 * 60 * 1000) throw new Error("解析超时");
+      await new Promise(r => setTimeout(r, 1500));
+      const res = await fetch(UPLOAD_ENDPOINT + "/status?jobId=" + encodeURIComponent(jobId));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "查询状态失败");
+      if (data.stage && data.stage !== lastStage) {
+        lastStage = data.stage;
+        upLog(data.stage);
+      }
+      upSetProgress(data.state === "done" ? 100 : Math.min(95, 62 + (Date.now() - t0) / 1000 * 2));
+      upStatus(data.state === "done" ? "完成" : (data.stage || "处理中"));
+      if (data.state === "done") {
+        const r = data.result || {};
+        upLog("比赛 " + r.matchId + " 解析成功，当前共 " + r.matchCount + " 场", "ok");
+        upStatus("完成。3 秒后自动刷新页面…");
+        setTimeout(() => {
+          const u = new URL(location.href);
+          u.searchParams.set("v", Date.now());
+          location.href = u.toString();
+        }, 3000);
+        break;
+      }
+      if (data.state === "error") throw new Error(data.message || "解析失败");
+    }
+  } catch (err) {
+    upLog(String(err.message || err), "err");
+    upStatus("失败");
+  } finally {
+    upState.busy = false;
+    $("upStart").disabled = !upState.file;
+  }
+}
+
+initUploadTab();
 renderStats();
 renderPlayers();
 
@@ -1386,9 +1578,12 @@ def main():
     make_match_data.build()
     players, match_count = collect_players()
     ai_endpoint = ""
+    upload_endpoint = ""
     try:
         with open(os.path.join(REPLAY_ROOT, "cloudbase.json"), encoding="utf-8") as fp:
-            ai_endpoint = json.load(fp).get("ai_endpoint", "")
+            conf = json.load(fp)
+        ai_endpoint = conf.get("ai_endpoint", "")
+        upload_endpoint = conf.get("upload_endpoint", "")
     except (OSError, json.JSONDecodeError):
         pass
     data_path = os.path.join(DOCS_DIR, "data", "matches.js")
@@ -1399,6 +1594,7 @@ def main():
             .replace("__MATCHES__", str(match_count))
             .replace("__TIME__", datetime.now().strftime("%Y-%m-%d %H:%M"))
             .replace("__AI_ENDPOINT__", json.dumps(ai_endpoint))
+            .replace("__UPLOAD_ENDPOINT__", json.dumps(upload_endpoint))
             .replace("__DATA_VER__", data_ver))
     os.makedirs(DOCS_DIR, exist_ok=True)
     out = os.path.join(DOCS_DIR, "index.html")

@@ -217,6 +217,26 @@
   .match-card .mc-actions { margin-top:9px; display:flex; gap:8px; }
   .adopted-banner { color:var(--accent); font-size:12px; margin-bottom:8px; }
 
+  .upload-box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+                padding:16px 18px; max-width:720px; }
+  .upload-hint { color:var(--muted); font-size:12.5px; line-height:1.7; margin:0 0 14px; }
+  .upload-field { display:flex; align-items:center; gap:10px; font-size:12.5px;
+                  color:var(--muted); margin-bottom:12px; }
+  .upload-field input { background:#11141a; color:var(--text); border:1px solid var(--line);
+                        border-radius:8px; padding:7px 10px; font-size:13px; outline:none; width:200px; }
+  .upload-field input:focus { border-color:var(--accent); }
+  .upload-drop { display:flex; align-items:center; justify-content:center; border:1px dashed #3a4152;
+                 border-radius:10px; padding:22px; cursor:pointer; color:var(--muted);
+                 font-size:13px; margin-bottom:12px; }
+  .upload-drop:hover { border-color:var(--accent); color:var(--text); }
+  .upload-drop input { display:none; }
+  .up-progress { height:8px; background:#1b1f28; border-radius:999px; overflow:hidden; margin:12px 0 8px; }
+  .up-bar { height:100%; width:0; background:var(--accent); transition:width .2s; }
+  .up-status { font-size:12.5px; color:var(--text); min-height:18px; margin-bottom:6px; }
+  .up-log { margin:8px 0 0; padding-left:18px; color:var(--muted); font-size:12px; line-height:1.8; }
+  .up-log .err { color:#e06666; }
+  .up-log .ok { color:#4ec9a5; }
+
   @media (max-width:640px) {
     body { padding:0 14px 60px; }
     .bar { margin:18px -14px 0; padding:12px 14px; flex-wrap:wrap; }
@@ -229,13 +249,14 @@
 <body>
 <header>
   <h1>Dota 2 对黑数据统计</h1>
-  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-26 21:31</div>
+  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-26 22:12</div>
 </header>
 
 <nav class="tabs">
   <button class="tab active" data-tab="stats">数据统计</button>
   <button class="tab" data-tab="match">比赛明细</button>
   <button class="tab" data-tab="roll">Roll 阵容</button>
+  <button class="tab" data-tab="upload">上传录像</button>
   <button class="tab" data-tab="rules">规则说明</button>
 </nav>
 
@@ -278,6 +299,32 @@
     <button class="ghost" id="clear">清空</button>
     <button class="ghost" id="top10">选前 10</button>
     <button class="primary" id="roll" disabled>Roll</button>
+  </div>
+</section>
+
+<section id="pane-upload" class="pane">
+  <h2>上传录像（.dem）</h2>
+  <div class="upload-box">
+    <p class="upload-hint">
+      从 Dota 2 客户端「观看 → 已下载的重放」找到比赛，文件名就是比赛 ID（例如
+      <code>9061520546.dem</code>）。上传后会自动解析、更新统计并重新发布本页，无需再动本地脚本。
+    </p>
+
+    <label class="upload-field">
+      <span>上传口令</span>
+      <input id="upCode" type="password" placeholder="输入口令" autocomplete="off">
+    </label>
+
+    <label class="upload-drop" id="upDrop">
+      <input id="upFile" type="file" accept=".dem">
+      <span id="upFileName">点击选择 .dem 文件</span>
+    </label>
+
+    <button class="primary" id="upStart" disabled>开始上传并解析</button>
+
+    <div class="up-progress" id="upBarWrap" hidden><div class="up-bar" id="upBar"></div></div>
+    <div class="up-status" id="upStatus"></div>
+    <ol class="up-log" id="upLog"></ol>
   </div>
 </section>
 
@@ -356,12 +403,13 @@
   </div>
 </section>
 
-<script src="data/matches.js?v=1793021517"></script>
+<script src="data/matches.js?v=1793023938"></script>
 <script>
 const PLAYERS = [{"name": "young zhu", "rating": 1065.3, "elo": 1074.1, "perf": 1068.9, "role": "核心", "provisional": false, "games": 13, "wins": 9, "losses": 4, "winRate": 69.2, "coreRate": "100%", "rankAll": 2.54, "rankTeam": 1.69, "kda": 5.19, "kd": "10.5/4.8/14.3", "gpm": 589.4, "xpm": 828.7, "nwK": 22.2, "dmgK": 34.9, "dmgTakenK": 25.2, "dmgGold": 1.55, "takenGold": 1.2, "mmr": 4500, "mmrNum": 4500, "heroes": "痛苦女王(2), 殁境神蚀者(1), 齐天大圣(1)"}, {"name": "木小可", "rating": 1043.5, "elo": 1078.0, "perf": 1074.4, "role": "酱油", "provisional": false, "games": 16, "wins": 11, "losses": 5, "winRate": 68.8, "coreRate": "25%", "rankAll": 7.0, "rankTeam": 4.06, "kda": 3.52, "kd": "4.8/6.2/17.0", "gpm": 350.8, "xpm": 546.3, "nwK": 12.9, "dmgK": 17.3, "dmgTakenK": 22.4, "dmgGold": 1.33, "takenGold": 1.78, "mmr": 2000, "mmrNum": 2000, "heroes": "斯拉达(2), 钢背兽(2), 莱恩(1)"}, {"name": "不明AOE", "rating": 985.6, "elo": 1028.3, "perf": 914.1, "role": "核心", "provisional": false, "games": 10, "wins": 6, "losses": 4, "winRate": 60.0, "coreRate": "50%", "rankAll": 6.3, "rankTeam": 3.4, "kda": 2.23, "kd": "5.1/8.6/14.1", "gpm": 375.6, "xpm": 564.3, "nwK": 13.6, "dmgK": 22.8, "dmgTakenK": 18.2, "dmgGold": 1.48, "takenGold": 1.33, "mmr": 3000, "mmrNum": 3000, "heroes": "邪影芳灵(2), 不朽尸王(1), 主宰(1)"}, {"name": "WW", "rating": 1013.9, "elo": 1033.7, "perf": 1034.7, "role": "酱油", "provisional": false, "games": 12, "wins": 7, "losses": 5, "winRate": 58.3, "coreRate": "25%", "rankAll": 7.5, "rankTeam": 4.08, "kda": 3.11, "kd": "3.9/6.6/16.6", "gpm": 330.9, "xpm": 501.7, "nwK": 11.5, "dmgK": 14.4, "dmgTakenK": 20.3, "dmgGold": 1.29, "takenGold": 1.85, "mmr": 2000, "mmrNum": 2000, "heroes": "莱恩(2), 上古巨神(2), 复仇之魂(1)"}, {"name": "肛客", "rating": 992.2, "elo": 1007.8, "perf": 996.9, "role": "酱油", "provisional": false, "games": 9, "wins": 5, "losses": 4, "winRate": 55.6, "coreRate": "44%", "rankAll": 6.56, "rankTeam": 3.67, "kda": 2.43, "kd": "4.8/7.8/14.1", "gpm": 379.9, "xpm": 561.4, "nwK": 13.6, "dmgK": 14.6, "dmgTakenK": 28.4, "dmgGold": 1.14, "takenGold": 2.26, "mmr": 2000, "mmrNum": 2000, "heroes": "钢背兽(2), 斧王(2), 伐木机(1)"}, {"name": "假赛王，拱手让冠军", "rating": 1014.6, "elo": 1005.4, "perf": 1008.1, "role": "核心", "provisional": false, "games": 15, "wins": 8, "losses": 7, "winRate": 53.3, "coreRate": "93%", "rankAll": 3.27, "rankTeam": 1.93, "kda": 3.7, "kd": "10.9/5.9/11.0", "gpm": 607.9, "xpm": 841.0, "nwK": 22.3, "dmgK": 33.3, "dmgTakenK": 28.6, "dmgGold": 1.47, "takenGold": 1.28, "mmr": 4000, "mmrNum": 4000, "heroes": "斯温(3), 潮汐猎人(1), 冥魂大帝(1)"}, {"name": "大超哥", "rating": 1020.8, "elo": 1007.2, "perf": 1009.7, "role": "核心", "provisional": false, "games": 14, "wins": 7, "losses": 7, "winRate": 50.0, "coreRate": "100%", "rankAll": 3.07, "rankTeam": 1.64, "kda": 3.81, "kd": "10.6/6.0/12.2", "gpm": 592.9, "xpm": 790.1, "nwK": 21.3, "dmgK": 35.3, "dmgTakenK": 28.7, "dmgGold": 1.51, "takenGold": 1.33, "mmr": 4500, "mmrNum": 4500, "heroes": "幻影刺客(1), 拉席克(1), 玛尔斯(1)"}, {"name": "龙鸣", "rating": 1002.1, "elo": 994.1, "perf": 981.6, "role": "核心", "provisional": false, "games": 14, "wins": 7, "losses": 7, "winRate": 50.0, "coreRate": "79%", "rankAll": 4.71, "rankTeam": 2.57, "kda": 3.83, "kd": "6.6/5.9/15.9", "gpm": 486.4, "xpm": 693.6, "nwK": 17.9, "dmgK": 23.6, "dmgTakenK": 23.6, "dmgGold": 1.36, "takenGold": 1.53, "mmr": 4000, "mmrNum": 4000, "heroes": "复仇之魂(2), 沉默术士(1), 幻影刺客(1)"}, {"name": "猪猪侠", "rating": 986.2, "elo": 997.2, "perf": 991.1, "role": "酱油", "provisional": false, "games": 4, "wins": 2, "losses": 2, "winRate": 50.0, "coreRate": "25%", "rankAll": 8.0, "rankTeam": 4.5, "kda": 1.73, "kd": "3.2/13.0/19.2", "gpm": 334.0, "xpm": 481.5, "nwK": 13.1, "dmgK": 23.7, "dmgTakenK": 37.4, "dmgGold": 1.75, "takenGold": 2.77, "mmr": 2000, "mmrNum": 2000, "heroes": "术士(1), 杰奇洛(1), 钢背兽(1)"}, {"name": "西恩DoTA亡", "rating": 1019.0, "elo": 992.4, "perf": 1040.3, "role": "核心", "provisional": false, "games": 13, "wins": 6, "losses": 7, "winRate": 46.2, "coreRate": "100%", "rankAll": 2.69, "rankTeam": 1.69, "kda": 5.24, "kd": "8.8/4.2/13.4", "gpm": 571.0, "xpm": 749.3, "nwK": 21.1, "dmgK": 26.8, "dmgTakenK": 23.2, "dmgGold": 1.22, "takenGold": 1.08, "mmr": 4000, "mmrNum": 4000, "heroes": "莉娜(2), 自然先知(1), 虚无之灵(1)"}, {"name": "奶龙", "rating": 1017.1, "elo": 980.1, "perf": 1083.4, "role": "酱油", "provisional": false, "games": 12, "wins": 5, "losses": 7, "winRate": 41.7, "coreRate": "25%", "rankAll": 8.08, "rankTeam": 4.25, "kda": 3.24, "kd": "3.5/7.2/20.0", "gpm": 337.6, "xpm": 543.1, "nwK": 11.5, "dmgK": 18.9, "dmgTakenK": 22.2, "dmgGold": 1.77, "takenGold": 1.9, "mmr": 3000, "mmrNum": 3000, "heroes": "寒冬飞龙(2), 撼地者(1), 暗影萨满(1)"}, {"name": "我才是乃龙", "rating": 990.2, "elo": 955.3, "perf": 993.7, "role": "核心", "provisional": false, "games": 9, "wins": 3, "losses": 6, "winRate": 33.3, "coreRate": "89%", "rankAll": 4.89, "rankTeam": 2.11, "kda": 3.05, "kd": "8.6/7.0/12.8", "gpm": 522.2, "xpm": 729.2, "nwK": 19.6, "dmgK": 33.9, "dmgTakenK": 32.5, "dmgGold": 1.88, "takenGold": 1.9, "mmr": 4000, "mmrNum": 4000, "heroes": "莉娜(2), 斧王(1), 虚空假面(1)"}, {"name": "猫不叫对不胡吃树加一", "rating": 969.1, "elo": 991.0, "perf": 942.2, "role": "核心", "provisional": false, "games": 3, "wins": 1, "losses": 2, "winRate": 33.3, "coreRate": "100%", "rankAll": 5.0, "rankTeam": 2.67, "kda": 1.89, "kd": "6.0/9.0/11.0", "gpm": 480.3, "xpm": 644.3, "nwK": 19.1, "dmgK": 22.6, "dmgTakenK": 33.7, "dmgGold": 1.17, "takenGold": 1.81, "mmr": 2000, "mmrNum": 2000, "heroes": "龙骑士(1), 末日使者(1), 齐天大圣(1)"}, {"name": "K2", "rating": 917.2, "elo": 855.4, "perf": 950.1, "role": "酱油", "provisional": false, "games": 16, "wins": 3, "losses": 13, "winRate": 18.8, "coreRate": "0%", "rankAll": 8.88, "rankTeam": 4.44, "kda": 1.66, "kd": "3.2/9.9/13.2", "gpm": 299.7, "xpm": 448.2, "nwK": 10.4, "dmgK": 15.2, "dmgTakenK": 21.3, "dmgGold": 1.49, "takenGold": 2.03, "mmr": 2000, "mmrNum": 2000, "heroes": "巫妖(2), 水晶室女(2), 杰奇洛(2)"}];
 const MATCH_COUNT = 16;
 const MATCHES = (window.MATCH_DATA && window.MATCH_DATA.matches) || [];
 const AI_ENDPOINT = "https://unhappy-grouse-d3gsbs7inb2cb10d6.service.tcloudbase.com/api/roll-ai";
+const UPLOAD_ENDPOINT = "https://dota-upload-335807-13-1514393073.sh.run.tcloudbase.com";
 const state = {
   selected: new Set(PLAYERS.map(p => p.name)),
   results: [],
@@ -1275,6 +1323,148 @@ $("aiInput").addEventListener("keydown", (e) => {
 document.querySelectorAll(".chip").forEach(c => {
   c.onclick = () => sendAI(c.dataset.prompt);
 });
+
+/* ---------- 上传录像 ---------- */
+const UP_CHUNK = 4 * 1024 * 1024;
+const upState = { file: null, busy: false };
+
+function upLog(text, cls) {
+  const li = document.createElement("li");
+  if (cls) li.className = cls;
+  li.textContent = text;
+  $("upLog").appendChild(li);
+}
+
+function upSetProgress(pct) {
+  $("upBarWrap").hidden = false;
+  $("upBar").style.width = Math.max(0, Math.min(100, pct)) + "%";
+}
+
+function upStatus(text) { $("upStatus").textContent = text; }
+
+function initUploadTab() {
+  const fileInput = $("upFile");
+  const startBtn = $("upStart");
+  const saved = sessionStorage.getItem("uploadCode");
+  if (saved) $("upCode").value = saved;
+
+  if (!UPLOAD_ENDPOINT) {
+    upStatus("上传服务尚未部署，暂时不可用。");
+    startBtn.disabled = true;
+    return;
+  }
+
+  $("upDrop").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    if (!/^\d{7,12}\.dem$/i.test(f.name)) {
+      upLog("文件名必须是比赛 ID，例如 9061520546.dem", "err");
+      upState.file = null;
+      $("upFileName").textContent = "点击选择 .dem 文件";
+      startBtn.disabled = true;
+      return;
+    }
+    if (f.size > 300 * 1024 * 1024) {
+      upLog("文件超过 300MB", "err");
+      upState.file = null;
+      startBtn.disabled = true;
+      return;
+    }
+    upState.file = f;
+    $("upFileName").textContent = f.name + " · " + (f.size / 1024 / 1024).toFixed(1) + " MB";
+    startBtn.disabled = false;
+  });
+
+  startBtn.addEventListener("click", () => {
+    if (upState.busy) return;
+    const code = $("upCode").value.trim();
+    if (!code) { upLog("请先输入上传口令", "err"); return; }
+    if (!upState.file) { upLog("请先选择 .dem 文件", "err"); return; }
+    sessionStorage.setItem("uploadCode", code);
+    uploadAndParse(upState.file, code);
+  });
+}
+
+async function uploadAndParse(file, code) {
+  upState.busy = true;
+  $("upStart").disabled = true;
+  $("upLog").innerHTML = "";
+  try {
+    const uploadId = [...crypto.getRandomValues(new Uint8Array(16))]
+      .map(b => b.toString(16).padStart(2, "0")).join("");
+    const total = Math.ceil(file.size / UP_CHUNK);
+    upLog("开始上传 " + total + " 个分片…");
+
+    for (let i = 0; i < total; i++) {
+      const blob = file.slice(i * UP_CHUNK, Math.min(file.size, (i + 1) * UP_CHUNK));
+      const res = await fetch(UPLOAD_ENDPOINT + "/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "x-upload-code": code,
+          "x-upload-id": uploadId,
+          "x-chunk-index": String(i),
+          "x-chunk-total": String(total),
+          "x-file-name": file.name,
+        },
+        body: blob,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ("上传失败 HTTP " + res.status));
+      upSetProgress((i + 1) / total * 60);
+      upStatus("上传中 " + (i + 1) + "/" + total + " · " + Math.round((i + 1) / total * 100) + "%");
+    }
+
+    upSetProgress(62);
+    upStatus("上传完成，开始解析…");
+    const start = await fetch(UPLOAD_ENDPOINT + "/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-upload-code": code },
+      body: JSON.stringify({ uploadId }),
+    });
+    const startData = await start.json().catch(() => ({}));
+    if (!start.ok) throw new Error(startData.error || "无法开始解析");
+    upLog("任务已创建：" + startData.jobId);
+
+    const jobId = startData.jobId;
+    const t0 = Date.now();
+    let lastStage = "";
+    while (true) {
+      if (Date.now() - t0 > 10 * 60 * 1000) throw new Error("解析超时");
+      await new Promise(r => setTimeout(r, 1500));
+      const res = await fetch(UPLOAD_ENDPOINT + "/status?jobId=" + encodeURIComponent(jobId));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "查询状态失败");
+      if (data.stage && data.stage !== lastStage) {
+        lastStage = data.stage;
+        upLog(data.stage);
+      }
+      upSetProgress(data.state === "done" ? 100 : Math.min(95, 62 + (Date.now() - t0) / 1000 * 2));
+      upStatus(data.state === "done" ? "完成" : (data.stage || "处理中"));
+      if (data.state === "done") {
+        const r = data.result || {};
+        upLog("比赛 " + r.matchId + " 解析成功，当前共 " + r.matchCount + " 场", "ok");
+        upStatus("完成。3 秒后自动刷新页面…");
+        setTimeout(() => {
+          const u = new URL(location.href);
+          u.searchParams.set("v", Date.now());
+          location.href = u.toString();
+        }, 3000);
+        break;
+      }
+      if (data.state === "error") throw new Error(data.message || "解析失败");
+    }
+  } catch (err) {
+    upLog(String(err.message || err), "err");
+    upStatus("失败");
+  } finally {
+    upState.busy = false;
+    $("upStart").disabled = !upState.file;
+  }
+}
+
+initUploadTab();
 renderStats();
 renderPlayers();
 

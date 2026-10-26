@@ -115,21 +115,26 @@ def load_role_overrides():
         return {}
 
 
+def player_key(p):
+    """比赛内稳定标识：优先 SteamID；没有 SteamID 时退回玩家名（云端脱敏数据）。"""
+    return str(p.get("steamid") or p.get("name") or p.get("player_id") or "")
+
+
 def assign_ranks(match):
-    """返回 {steamid: (全场10人排名, 队内5人排名)}，净资产越高排名越靠前。"""
+    """返回 {player_key: (全场10人排名, 队内5人排名)}，净资产越高排名越靠前。"""
     result = {}
 
     ranked_all = sorted(
         match["players"], key=lambda p: p.get("net_worth", 0), reverse=True
     )
     for i, p in enumerate(ranked_all):
-        result.setdefault(str(p.get("steamid", "")), [None, None])[0] = i + 1
+        result.setdefault(player_key(p), [None, None])[0] = i + 1
 
     for team in ("radiant", "dire"):
         members = [p for p in match["players"] if p.get("team") == team]
         members.sort(key=lambda p: p.get("net_worth", 0), reverse=True)
         for i, p in enumerate(members):
-            result.setdefault(str(p.get("steamid", "")), [None, None])[1] = i + 1
+            result.setdefault(player_key(p), [None, None])[1] = i + 1
 
     return {k: tuple(v) for k, v in result.items()}
 
@@ -193,8 +198,9 @@ def aggregate(matches):
             if hero:
                 row["heroes"][hero] += 1
 
-            if sid in ranks:
-                rank_all, rank_team = ranks[sid]
+            pid = player_key(p)
+            if pid in ranks:
+                rank_all, rank_team = ranks[pid]
                 if rank_all:
                     row["rank_all"].append(rank_all)
                 if rank_team:
