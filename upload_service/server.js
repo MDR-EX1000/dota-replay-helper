@@ -383,6 +383,23 @@ async function processJob(job) {
   const matchId = upload.name.replace(/\.dem$/i, '');
   const demPath = path.join(upload.dir, 'upload.dem');
 
+  // 按比赛 ID 去重：已解析过的直接跳过（不重复解析、不重复发布）
+  if (listMatchIds().includes(matchId)) {
+    fs.rm(upload.dir, { recursive: true, force: true }, () => {});
+    uploads.delete(job.uploadId);
+    job.state = 'done';
+    job.stage = '已存在，跳过';
+    job.result = {
+      matchId,
+      skipped: true,
+      matchCount: listMatchIds().length,
+      url: DOMAIN,
+      page: DOMAIN ? DOMAIN.replace(/\/?$/, '/') + '?v=' + Date.now() : '',
+    };
+    job.message = `比赛 ${matchId} 已存在（按 ID 去重），已跳过`;
+    return;
+  }
+
   stage(job, '合并分片');
   const out = fs.createWriteStream(demPath);
   for (let i = 0; i < upload.total; i++) {
@@ -415,6 +432,8 @@ async function processJob(job) {
     { timeout: 300000 }
   );
   if (parsed.code !== 0 || !fs.existsSync(jsonPath)) {
+    // 解析失败可能留下残缺文件，必须清掉，避免混进下一次发布
+    try { fs.unlinkSync(jsonPath); } catch (_) { /* ignore */ }
     throw new Error('解析失败: ' + (parsed.out || parsed.err || '').slice(-400));
   }
 
@@ -423,6 +442,8 @@ async function processJob(job) {
   const players = (data.players || []).length;
   const duration = data.duration || 0;
   if (lobby !== 1 || players !== 10 || duration <= 0) {
+    // 非练习赛：删除解析结果，确保不会在后续发布中被带进统计
+    try { fs.unlinkSync(jsonPath); } catch (_) { /* ignore */ }
     throw new Error(`不是有效的练习赛（lobby_type=${lobby}, players=${players}, duration=${duration}）`);
   }
 
@@ -506,6 +527,17 @@ async function handleUpload(req, res) {
   if (index < 0 || index >= total) return json(res, 400, { error: '分片序号无效' });
   if (!/^\d{7,12}\.dem$/i.test(name)) {
     return json(res, 400, { error: '文件名必须是比赛 ID，例如 9061520546.dem' });
+  }
+
+  // 第一片就检查 ID 是否已存在，避免白传 100MB
+  if (index === 0 && !uploads.has(uploadId)) {
+    const matchId = name.replace(/\.dem$/i, '');
+    if (listMatchIds().includes(matchId)) {
+      return json(res, 409, {
+        error: `比赛 ${matchId} 已存在（按 ID 去重），无需重复上传`,
+        code: 'EXISTS',
+      });
+    }
   }
 
   const body = await readBody(req, MAX_CHUNK_BYTES);

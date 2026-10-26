@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>Dota 2 对黑数据统计</h1>
-  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-26 22:18</div>
+  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-26 22:21</div>
 </header>
 
 <nav class="tabs">
@@ -403,7 +403,7 @@
   </div>
 </section>
 
-<script src="data/matches.js?v=1793024315"></script>
+<script src="data/matches.js?v=1793024475"></script>
 <script>
 const PLAYERS = [{"name": "young zhu", "rating": 1065.3, "elo": 1074.1, "perf": 1068.9, "role": "核心", "provisional": false, "games": 13, "wins": 9, "losses": 4, "winRate": 69.2, "coreRate": "100%", "rankAll": 2.54, "rankTeam": 1.69, "kda": 5.19, "kd": "10.5/4.8/14.3", "gpm": 589.4, "xpm": 828.7, "nwK": 22.2, "dmgK": 34.9, "dmgTakenK": 25.2, "dmgGold": 1.55, "takenGold": 1.2, "mmr": 4500, "mmrNum": 4500, "heroes": "痛苦女王(2), 殁境神蚀者(1), 齐天大圣(1)"}, {"name": "木小可", "rating": 1043.5, "elo": 1078.0, "perf": 1074.4, "role": "酱油", "provisional": false, "games": 16, "wins": 11, "losses": 5, "winRate": 68.8, "coreRate": "25%", "rankAll": 7.0, "rankTeam": 4.06, "kda": 3.52, "kd": "4.8/6.2/17.0", "gpm": 350.8, "xpm": 546.3, "nwK": 12.9, "dmgK": 17.3, "dmgTakenK": 22.4, "dmgGold": 1.33, "takenGold": 1.78, "mmr": 2000, "mmrNum": 2000, "heroes": "斯拉达(2), 钢背兽(2), 莱恩(1)"}, {"name": "不明AOE", "rating": 985.6, "elo": 1028.3, "perf": 914.1, "role": "核心", "provisional": false, "games": 10, "wins": 6, "losses": 4, "winRate": 60.0, "coreRate": "50%", "rankAll": 6.3, "rankTeam": 3.4, "kda": 2.23, "kd": "5.1/8.6/14.1", "gpm": 375.6, "xpm": 564.3, "nwK": 13.6, "dmgK": 22.8, "dmgTakenK": 18.2, "dmgGold": 1.48, "takenGold": 1.33, "mmr": 3000, "mmrNum": 3000, "heroes": "邪影芳灵(2), 不朽尸王(1), 主宰(1)"}, {"name": "WW", "rating": 1013.9, "elo": 1033.7, "perf": 1034.7, "role": "酱油", "provisional": false, "games": 12, "wins": 7, "losses": 5, "winRate": 58.3, "coreRate": "25%", "rankAll": 7.5, "rankTeam": 4.08, "kda": 3.11, "kd": "3.9/6.6/16.6", "gpm": 330.9, "xpm": 501.7, "nwK": 11.5, "dmgK": 14.4, "dmgTakenK": 20.3, "dmgGold": 1.29, "takenGold": 1.85, "mmr": 2000, "mmrNum": 2000, "heroes": "莱恩(2), 上古巨神(2), 复仇之魂(1)"}, {"name": "肛客", "rating": 992.2, "elo": 1007.8, "perf": 996.9, "role": "酱油", "provisional": false, "games": 9, "wins": 5, "losses": 4, "winRate": 55.6, "coreRate": "44%", "rankAll": 6.56, "rankTeam": 3.67, "kda": 2.43, "kd": "4.8/7.8/14.1", "gpm": 379.9, "xpm": 561.4, "nwK": 13.6, "dmgK": 14.6, "dmgTakenK": 28.4, "dmgGold": 1.14, "takenGold": 2.26, "mmr": 2000, "mmrNum": 2000, "heroes": "钢背兽(2), 斧王(2), 伐木机(1)"}, {"name": "假赛王，拱手让冠军", "rating": 1014.6, "elo": 1005.4, "perf": 1008.1, "role": "核心", "provisional": false, "games": 15, "wins": 8, "losses": 7, "winRate": 53.3, "coreRate": "93%", "rankAll": 3.27, "rankTeam": 1.93, "kda": 3.7, "kd": "10.9/5.9/11.0", "gpm": 607.9, "xpm": 841.0, "nwK": 22.3, "dmgK": 33.3, "dmgTakenK": 28.6, "dmgGold": 1.47, "takenGold": 1.28, "mmr": 4000, "mmrNum": 4000, "heroes": "斯温(3), 潮汐猎人(1), 冥魂大帝(1)"}, {"name": "大超哥", "rating": 1020.8, "elo": 1007.2, "perf": 1009.7, "role": "核心", "provisional": false, "games": 14, "wins": 7, "losses": 7, "winRate": 50.0, "coreRate": "100%", "rankAll": 3.07, "rankTeam": 1.64, "kda": 3.81, "kd": "10.6/6.0/12.2", "gpm": 592.9, "xpm": 790.1, "nwK": 21.3, "dmgK": 35.3, "dmgTakenK": 28.7, "dmgGold": 1.51, "takenGold": 1.33, "mmr": 4500, "mmrNum": 4500, "heroes": "幻影刺客(1), 拉席克(1), 玛尔斯(1)"}, {"name": "龙鸣", "rating": 1002.1, "elo": 994.1, "perf": 981.6, "role": "核心", "provisional": false, "games": 14, "wins": 7, "losses": 7, "winRate": 50.0, "coreRate": "79%", "rankAll": 4.71, "rankTeam": 2.57, "kda": 3.83, "kd": "6.6/5.9/15.9", "gpm": 486.4, "xpm": 693.6, "nwK": 17.9, "dmgK": 23.6, "dmgTakenK": 23.6, "dmgGold": 1.36, "takenGold": 1.53, "mmr": 4000, "mmrNum": 4000, "heroes": "复仇之魂(2), 沉默术士(1), 幻影刺客(1)"}, {"name": "猪猪侠", "rating": 986.2, "elo": 997.2, "perf": 991.1, "role": "酱油", "provisional": false, "games": 4, "wins": 2, "losses": 2, "winRate": 50.0, "coreRate": "25%", "rankAll": 8.0, "rankTeam": 4.5, "kda": 1.73, "kd": "3.2/13.0/19.2", "gpm": 334.0, "xpm": 481.5, "nwK": 13.1, "dmgK": 23.7, "dmgTakenK": 37.4, "dmgGold": 1.75, "takenGold": 2.77, "mmr": 2000, "mmrNum": 2000, "heroes": "术士(1), 杰奇洛(1), 钢背兽(1)"}, {"name": "西恩DoTA亡", "rating": 1019.0, "elo": 992.4, "perf": 1040.3, "role": "核心", "provisional": false, "games": 13, "wins": 6, "losses": 7, "winRate": 46.2, "coreRate": "100%", "rankAll": 2.69, "rankTeam": 1.69, "kda": 5.24, "kd": "8.8/4.2/13.4", "gpm": 571.0, "xpm": 749.3, "nwK": 21.1, "dmgK": 26.8, "dmgTakenK": 23.2, "dmgGold": 1.22, "takenGold": 1.08, "mmr": 4000, "mmrNum": 4000, "heroes": "莉娜(2), 自然先知(1), 虚无之灵(1)"}, {"name": "奶龙", "rating": 1017.1, "elo": 980.1, "perf": 1083.4, "role": "酱油", "provisional": false, "games": 12, "wins": 5, "losses": 7, "winRate": 41.7, "coreRate": "25%", "rankAll": 8.08, "rankTeam": 4.25, "kda": 3.24, "kd": "3.5/7.2/20.0", "gpm": 337.6, "xpm": 543.1, "nwK": 11.5, "dmgK": 18.9, "dmgTakenK": 22.2, "dmgGold": 1.77, "takenGold": 1.9, "mmr": 3000, "mmrNum": 3000, "heroes": "寒冬飞龙(2), 撼地者(1), 暗影萨满(1)"}, {"name": "我才是乃龙", "rating": 990.2, "elo": 955.3, "perf": 993.7, "role": "核心", "provisional": false, "games": 9, "wins": 3, "losses": 6, "winRate": 33.3, "coreRate": "89%", "rankAll": 4.89, "rankTeam": 2.11, "kda": 3.05, "kd": "8.6/7.0/12.8", "gpm": 522.2, "xpm": 729.2, "nwK": 19.6, "dmgK": 33.9, "dmgTakenK": 32.5, "dmgGold": 1.88, "takenGold": 1.9, "mmr": 4000, "mmrNum": 4000, "heroes": "莉娜(2), 斧王(1), 虚空假面(1)"}, {"name": "猫不叫对不胡吃树加一", "rating": 969.1, "elo": 991.0, "perf": 942.2, "role": "核心", "provisional": false, "games": 3, "wins": 1, "losses": 2, "winRate": 33.3, "coreRate": "100%", "rankAll": 5.0, "rankTeam": 2.67, "kda": 1.89, "kd": "6.0/9.0/11.0", "gpm": 480.3, "xpm": 644.3, "nwK": 19.1, "dmgK": 22.6, "dmgTakenK": 33.7, "dmgGold": 1.17, "takenGold": 1.81, "mmr": 2000, "mmrNum": 2000, "heroes": "龙骑士(1), 末日使者(1), 齐天大圣(1)"}, {"name": "K2", "rating": 917.2, "elo": 855.4, "perf": 950.1, "role": "酱油", "provisional": false, "games": 16, "wins": 3, "losses": 13, "winRate": 18.8, "coreRate": "0%", "rankAll": 8.88, "rankTeam": 4.44, "kda": 1.66, "kd": "3.2/9.9/13.2", "gpm": 299.7, "xpm": 448.2, "nwK": 10.4, "dmgK": 15.2, "dmgTakenK": 21.3, "dmgGold": 1.49, "takenGold": 2.03, "mmr": 2000, "mmrNum": 2000, "heroes": "巫妖(2), 水晶室女(2), 杰奇洛(2)"}];
 const MATCH_COUNT = 16;
@@ -1411,6 +1411,12 @@ async function uploadAndParse(file, code) {
         body: blob,
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data.code === "EXISTS") {
+        upSetProgress(100);
+        upLog(data.error, "ok");
+        upStatus("已存在，跳过上传");
+        return;
+      }
       if (!res.ok) throw new Error(data.error || ("上传失败 HTTP " + res.status));
       upSetProgress((i + 1) / total * 60);
       upStatus("上传中 " + (i + 1) + "/" + total + " · " + Math.round((i + 1) / total * 100) + "%");
@@ -1444,6 +1450,11 @@ async function uploadAndParse(file, code) {
       upStatus(data.state === "done" ? "完成" : (data.stage || "处理中"));
       if (data.state === "done") {
         const r = data.result || {};
+        if (r.skipped) {
+          upLog("比赛 " + r.matchId + " 已存在，未重复解析", "ok");
+          upStatus("已存在，无需重复上传");
+          break;
+        }
         upLog("比赛 " + r.matchId + " 解析成功，当前共 " + r.matchCount + " 场", "ok");
         upStatus("完成。3 秒后自动刷新页面…");
         setTimeout(() => {
