@@ -2,5 +2,6 @@
   "env_id": "unhappy-grouse-d3gsbs7inb2cb10d6",
   "domain": "https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/",
   "ai_endpoint": "https://unhappy-grouse-d3gsbs7inb2cb10d6.service.tcloudbase.com/api/roll-ai",
-  "upload_endpoint": "https://dota-upload-335807-13-1514393073.sh.run.tcloudbase.com"
+  "upload_endpoint": "https://dota-upload-335807-13-1514393073.sh.run.tcloudbase.com",
+  "upload_hint": "口令见群公告，或向群主索要。"
 }

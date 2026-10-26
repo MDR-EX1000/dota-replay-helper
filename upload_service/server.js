@@ -584,6 +584,42 @@ async function handleParse(req, res) {
   return json(res, 202, { jobId: job.id });
 }
 
+async function handleCheck(req, res) {
+  if (!checkCode(req)) return json(res, 401, { error: '口令错误' });
+  const body = await readBody(req, 64 * 1024);
+  let payload = {};
+  try {
+    payload = JSON.parse(body.toString('utf8') || '{}');
+  } catch (_) {
+    return json(res, 400, { error: '请求格式错误' });
+  }
+  const matchId = String(payload.matchId || '');
+  if (!/^\d{7,12}$/.test(matchId)) return json(res, 400, { error: '比赛 ID 无效' });
+  const ids = listMatchIds();
+  return json(res, 200, { exists: ids.includes(matchId), matchCount: ids.length });
+}
+
+async function handleCancel(req, res) {
+  if (!checkCode(req)) return json(res, 401, { error: '口令错误' });
+  const body = await readBody(req, 64 * 1024);
+  let payload = {};
+  try {
+    payload = JSON.parse(body.toString('utf8') || '{}');
+  } catch (_) {
+    return json(res, 400, { error: '请求格式错误' });
+  }
+  const uploadId = String(payload.uploadId || '');
+  const running = [...jobs.values()].find(
+    (j) => j.uploadId === uploadId && (j.state === 'running' || j.state === 'queued')
+  );
+  if (running) return json(res, 409, { error: '已开始解析，无法取消' });
+  const upload = uploads.get(uploadId);
+  if (!upload) return json(res, 200, { ok: true });
+  fs.rm(upload.dir, { recursive: true, force: true }, () => {});
+  uploads.delete(uploadId);
+  return json(res, 200, { ok: true });
+}
+
 function handleStatus(res, url) {
   const jobId = url.searchParams.get('jobId') || '';
   const job = jobs.get(jobId);
@@ -609,6 +645,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         ok: true,
         matches: listMatchIds().length,
+        maxBytes: MAX_FILE_BYTES,
+        chunkBytes: MAX_CHUNK_BYTES,
         state: { remote: stateRemote, incomplete: stateIncomplete },
         env: ENV_ID,
       });
@@ -618,6 +656,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/parse') {
       return await handleParse(req, res);
+    }
+    if (req.method === 'POST' && url.pathname === '/check') {
+      return await handleCheck(req, res);
+    }
+    if (req.method === 'POST' && url.pathname === '/cancel') {
+      return await handleCancel(req, res);
     }
     if (req.method === 'GET' && url.pathname === '/status') {
       return handleStatus(res, url);

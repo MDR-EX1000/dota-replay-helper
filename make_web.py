@@ -289,14 +289,27 @@ TEMPLATE = r"""<!DOCTYPE html>
   .upload-hint { color:var(--muted); font-size:12.5px; line-height:1.7; margin:0 0 14px; }
   .upload-field { display:flex; align-items:center; gap:10px; font-size:12.5px;
                   color:var(--muted); margin-bottom:12px; }
-  .upload-field input { background:#11141a; color:var(--text); border:1px solid var(--line);
-                        border-radius:8px; padding:7px 10px; font-size:13px; outline:none; width:200px; }
-  .upload-field input:focus { border-color:var(--accent); }
+  .upload-field > input { background:#11141a; color:var(--text); border:1px solid var(--line);
+                          border-radius:8px; padding:7px 10px; font-size:13px; outline:none; width:200px; }
+  .upload-field > input:focus { border-color:var(--accent); }
+  .up-remember { display:inline-flex; align-items:center; gap:5px; font-size:12px;
+                 color:var(--muted); cursor:pointer; }
+  .up-remember input { width:auto; margin:0; }
+  .up-service { font-size:12px; color:var(--muted); margin:-4px 0 12px; }
+  .up-service.ok { color:#4ec9a5; }
+  .up-service.err { color:#e06666; }
+  .upload-hint-line { color:var(--muted); font-size:11.5px; margin:-6px 0 10px; }
   .upload-drop { display:flex; align-items:center; justify-content:center; border:1px dashed #3a4152;
                  border-radius:10px; padding:22px; cursor:pointer; color:var(--muted);
                  font-size:13px; margin-bottom:12px; }
-  .upload-drop:hover { border-color:var(--accent); color:var(--text); }
+  .upload-drop:hover, .upload-drop.dragover { border-color:var(--accent); color:var(--text); }
+  .upload-drop.dragover { background:#1a1f29; }
   .upload-drop input { display:none; }
+  .up-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .up-note { color:var(--muted); font-size:11.5px; }
+  .up-result { margin-top:12px; padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+               background:#1b1f28; font-size:12.5px; line-height:1.8; }
+  .up-result a { color:var(--accent); }
   .up-progress { height:8px; background:#1b1f28; border-radius:999px; overflow:hidden; margin:12px 0 8px; }
   .up-bar { height:100%; width:0; background:var(--accent); transition:width .2s; }
   .up-status { font-size:12.5px; color:var(--text); min-height:18px; margin-bottom:6px; }
@@ -377,20 +390,29 @@ TEMPLATE = r"""<!DOCTYPE html>
       <code>9061520546.dem</code>）。上传后会自动解析、更新统计并重新发布本页，无需再动本地脚本。
     </p>
 
-    <label class="upload-field">
+    <div class="up-service" id="upService">正在检查服务状态…</div>
+
+    <div class="upload-field">
       <span>上传口令</span>
       <input id="upCode" type="password" placeholder="输入口令" autocomplete="off">
-    </label>
+      <label class="up-remember"><input id="upRemember" type="checkbox"> 记住</label>
+    </div>
+    <div class="upload-hint-line" id="upCodeHint"></div>
 
     <label class="upload-drop" id="upDrop">
       <input id="upFile" type="file" accept=".dem">
-      <span id="upFileName">点击选择 .dem 文件</span>
+      <span id="upFileName">点击选择，或把 .dem 文件拖到这里</span>
     </label>
 
-    <button class="primary" id="upStart" disabled>开始上传并解析</button>
+    <div class="up-actions">
+      <button class="primary" id="upStart" disabled>开始上传并解析</button>
+      <button class="ghost" id="upCancel" hidden>取消</button>
+      <span class="up-note">解析约 1–2 分钟，成功后本页数据即可查看</span>
+    </div>
 
     <div class="up-progress" id="upBarWrap" hidden><div class="up-bar" id="upBar"></div></div>
     <div class="up-status" id="upStatus"></div>
+    <div class="up-result" id="upResult" hidden></div>
     <ol class="up-log" id="upLog"></ol>
   </div>
 </section>
@@ -477,6 +499,7 @@ const MATCH_COUNT = __MATCHES__;
 const MATCHES = (window.MATCH_DATA && window.MATCH_DATA.matches) || [];
 const AI_ENDPOINT = __AI_ENDPOINT__;
 const UPLOAD_ENDPOINT = __UPLOAD_ENDPOINT__;
+const UPLOAD_HINT = __UPLOAD_HINT__;
 const state = {
   selected: new Set(PLAYERS.map(p => p.name)),
   results: [],
@@ -495,6 +518,7 @@ function showTab(name) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".pane").forEach(p => p.classList.toggle("active", p.id === "pane-" + name));
   if (name === "match") initMatchTab();
+  if (name === "upload") warmUpUpload();
 }
 
 /* ---------- 数据统计 ---------- */
@@ -1393,7 +1417,11 @@ document.querySelectorAll(".chip").forEach(c => {
 
 /* ---------- 上传录像 ---------- */
 const UP_CHUNK = 4 * 1024 * 1024;
-const upState = { file: null, busy: false };
+const UP_MAX_RETRY = 3;
+const upState = {
+  file: null, busy: false, abort: null, uploadId: null,
+  cancelled: false, startedAt: 0,
+};
 
 function upLog(text, cls) {
   const li = document.createElement("li");
@@ -1409,11 +1437,140 @@ function upSetProgress(pct) {
 
 function upStatus(text) { $("upStatus").textContent = text; }
 
+function upResult(html) {
+  const el = $("upResult");
+  if (!html) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.innerHTML = html;
+}
+
+function upCode() { return $("upCode").value.trim(); }
+
+function upStore(key, val) {
+  try {
+    if (val === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, val);
+  } catch (_) { /* 隐私模式忽略 */ }
+}
+
+function upReset() {
+  upState.file = null;
+  upState.uploadId = null;
+  $("upFile").value = "";
+  $("upFileName").textContent = "点击选择，或把 .dem 文件拖到这里";
+  $("upStart").disabled = true;
+  upResult("");
+}
+
+function upFinish() {
+  upState.busy = false;
+  upState.abort = null;
+  $("upStart").disabled = !upState.file;
+  $("upStart").hidden = false;
+  $("upCancel").hidden = true;
+}
+
+function upFriendlyError(msg) {
+  const m = String(msg || "");
+  if (m.includes("口令错误")) return "口令错误，请检查后重试";
+  if (m.includes("Failed to fetch") || m.includes("aborted")) return "网络中断，请重试";
+  return m;
+}
+
+async function upFetch(url, opts, timeoutMs) {
+  const ctrl = new AbortController();
+  upState.abort = ctrl;
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs || 90000);
+  try {
+    const res = await fetch(url, { ...opts, signal: ctrl.signal });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  } finally {
+    clearTimeout(timer);
+    upState.abort = null;
+  }
+}
+
+let upWarmAt = 0;
+async function checkService(force) {
+  const el = $("upService");
+  if (!UPLOAD_ENDPOINT) {
+    el.className = "up-service err";
+    el.textContent = "上传服务尚未部署，暂时不可用";
+    return false;
+  }
+  if (!force && Date.now() - upWarmAt < 60000) return true;
+  el.className = "up-service";
+  el.textContent = "正在连接上传服务…（首次访问可能需要唤醒 20–30 秒）";
+  try {
+    const res = await fetch(UPLOAD_ENDPOINT + "/health", { cache: "no-store" });
+    const d = await res.json();
+    if (!res.ok || !d.ok) throw new Error();
+    upWarmAt = Date.now();
+    el.className = "up-service ok";
+    el.textContent = "服务就绪 · 已有 " + d.matches + " 场比赛 · 单文件上限 " +
+      Math.round((d.maxBytes || 300 * 1024 * 1024) / 1024 / 1024) + "MB";
+    return true;
+  } catch (_) {
+    el.className = "up-service err";
+    el.textContent = "上传服务暂时连不上；首次访问需要唤醒，请稍后再试";
+    return false;
+  }
+}
+
+function warmUpUpload() { checkService(false); }
+
+async function checkExists() {
+  if (!upState.file || !upCode() || !UPLOAD_ENDPOINT) return;
+  const matchId = upState.file.name.replace(/\.dem$/i, "");
+  try {
+    const { res, data } = await upFetch(UPLOAD_ENDPOINT + "/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-upload-code": upCode() },
+      body: JSON.stringify({ matchId }),
+    }, 40000);
+    if (res.status === 401) { upLog("口令错误，请检查后重试", "err"); return; }
+    if (!res.ok) return;
+    if (data.exists) {
+      upLog("比赛 " + matchId + " 已存在（按 ID 去重），无需重复上传", "ok");
+      upStatus("已存在，无需上传");
+      $("upStart").disabled = true;
+    } else if (!upState.busy) {
+      upStatus("");
+      $("upStart").disabled = false;
+    }
+  } catch (_) { /* 真正上传时还会再校验 */ }
+}
+
+function pickFile(f) {
+  upResult("");
+  if (!f) return;
+  if (!/^\d{7,12}\.dem$/i.test(f.name)) {
+    upLog("文件名必须是比赛 ID，例如 9061520546.dem", "err");
+    upReset();
+    return;
+  }
+  if (f.size > 300 * 1024 * 1024) {
+    upLog("文件超过 300MB", "err");
+    upReset();
+    return;
+  }
+  upState.file = f;
+  $("upFileName").textContent = f.name + " · " + (f.size / 1024 / 1024).toFixed(1) + " MB";
+  $("upStart").disabled = false;
+  upStatus("已选择，点「开始上传并解析」");
+  checkExists();
+}
+
 function initUploadTab() {
   const fileInput = $("upFile");
   const startBtn = $("upStart");
-  const saved = sessionStorage.getItem("uploadCode");
-  if (saved) $("upCode").value = saved;
+  const saved = localStorage.getItem("uploadCode") || sessionStorage.getItem("uploadCode");
+  if (saved) {
+    $("upCode").value = saved;
+    $("upRemember").checked = !!localStorage.getItem("uploadCode");
+  }
+  $("upCodeHint").textContent = UPLOAD_HINT || "";
 
   if (!UPLOAD_ENDPOINT) {
     upStatus("上传服务尚未部署，暂时不可用。");
@@ -1422,123 +1579,194 @@ function initUploadTab() {
   }
 
   $("upDrop").addEventListener("click", () => fileInput.click());
+  ["dragenter", "dragover"].forEach((ev) => $("upDrop").addEventListener(ev, (e) => {
+    e.preventDefault();
+    $("upDrop").classList.add("dragover");
+  }));
+  ["dragleave", "drop"].forEach((ev) => $("upDrop").addEventListener(ev, (e) => {
+    e.preventDefault();
+    $("upDrop").classList.remove("dragover");
+  }));
+  $("upDrop").addEventListener("drop", (e) => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) pickFile(f);
+  });
+  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("drop", (e) => e.preventDefault());
+
   fileInput.addEventListener("change", () => {
     const f = fileInput.files && fileInput.files[0];
-    if (!f) return;
-    if (!/^\d{7,12}\.dem$/i.test(f.name)) {
-      upLog("文件名必须是比赛 ID，例如 9061520546.dem", "err");
-      upState.file = null;
-      $("upFileName").textContent = "点击选择 .dem 文件";
-      startBtn.disabled = true;
-      return;
-    }
-    if (f.size > 300 * 1024 * 1024) {
-      upLog("文件超过 300MB", "err");
-      upState.file = null;
-      startBtn.disabled = true;
-      return;
-    }
-    upState.file = f;
-    $("upFileName").textContent = f.name + " · " + (f.size / 1024 / 1024).toFixed(1) + " MB";
-    startBtn.disabled = false;
+    if (f) pickFile(f);
   });
 
-  startBtn.addEventListener("click", () => {
+  $("upCode").addEventListener("blur", () => { if (upCode()) checkExists(); });
+
+  $("upStart").addEventListener("click", () => {
     if (upState.busy) return;
-    const code = $("upCode").value.trim();
-    if (!code) { upLog("请先输入上传口令", "err"); return; }
+    const code = upCode();
+    if (!code) { upLog("请先输入上传口令", "err"); $("upCode").focus(); return; }
     if (!upState.file) { upLog("请先选择 .dem 文件", "err"); return; }
-    sessionStorage.setItem("uploadCode", code);
+    if ($("upRemember").checked) {
+      upStore("uploadCode", code);
+      sessionStorage.removeItem("uploadCode");
+    } else {
+      sessionStorage.setItem("uploadCode", code);
+      upStore("uploadCode", null);
+    }
     uploadAndParse(upState.file, code);
+  });
+
+  $("upCancel").addEventListener("click", async () => {
+    if (!upState.busy) return;
+    upState.cancelled = true;
+    if (upState.abort) upState.abort.abort();
+    if (upState.uploadId && upCode()) {
+      fetch(UPLOAD_ENDPOINT + "/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-upload-code": upCode() },
+        body: JSON.stringify({ uploadId: upState.uploadId }),
+      }).catch(() => {});
+    }
+    upLog("已取消上传", "err");
+    upStatus("已取消");
+    upSetProgress(0);
+    upFinish();
+  });
+
+  window.addEventListener("beforeunload", (e) => {
+    if (upState.busy) { e.preventDefault(); e.returnValue = ""; }
   });
 }
 
 async function uploadAndParse(file, code) {
   upState.busy = true;
+  upState.cancelled = false;
+  upState.startedAt = Date.now();
   $("upStart").disabled = true;
+  $("upStart").hidden = true;
+  $("upCancel").hidden = false;
   $("upLog").innerHTML = "";
+  upResult("");
+  upSetProgress(0);
+  checkService(false);
+
   try {
     const uploadId = [...crypto.getRandomValues(new Uint8Array(16))]
       .map(b => b.toString(16).padStart(2, "0")).join("");
+    upState.uploadId = uploadId;
     const total = Math.ceil(file.size / UP_CHUNK);
     upLog("开始上传 " + total + " 个分片…");
 
     for (let i = 0; i < total; i++) {
+      if (upState.cancelled) return;
       const blob = file.slice(i * UP_CHUNK, Math.min(file.size, (i + 1) * UP_CHUNK));
-      const res = await fetch(UPLOAD_ENDPOINT + "/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "x-upload-code": code,
-          "x-upload-id": uploadId,
-          "x-chunk-index": String(i),
-          "x-chunk-total": String(total),
-          "x-file-name": file.name,
-        },
-        body: blob,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 409 && data.code === "EXISTS") {
-        upSetProgress(100);
-        upLog(data.error, "ok");
-        upStatus("已存在，跳过上传");
-        return;
+      let lastErr = null;
+      let ok = false;
+      for (let attempt = 1; attempt <= UP_MAX_RETRY && !upState.cancelled; attempt++) {
+        try {
+          const { res, data } = await upFetch(UPLOAD_ENDPOINT + "/upload", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/octet-stream",
+              "x-upload-code": code,
+              "x-upload-id": uploadId,
+              "x-chunk-index": String(i),
+              "x-chunk-total": String(total),
+              "x-file-name": file.name,
+            },
+            body: blob,
+          }, 120000);
+          if (res.status === 409 && data.code === "EXISTS") {
+            upSetProgress(100);
+            upLog(data.error, "ok");
+            upStatus("已存在，跳过上传");
+            upFinish();
+            return;
+          }
+          if (res.status === 401) throw new Error("口令错误，请检查后重试");
+          if (!res.ok) throw new Error(data.error || ("上传失败 HTTP " + res.status));
+          ok = true;
+          break;
+        } catch (err) {
+          if (upState.cancelled) return;
+          lastErr = err;
+          if (String(err.message || "").includes("口令错误")) throw err;
+          if (attempt < UP_MAX_RETRY) {
+            upLog("第 " + (i + 1) + " 片失败，重试 " + attempt + "/" + (UP_MAX_RETRY - 1) + "…", "err");
+            await new Promise(r => setTimeout(r, 700 * attempt));
+          }
+        }
       }
-      if (!res.ok) throw new Error(data.error || ("上传失败 HTTP " + res.status));
-      upSetProgress((i + 1) / total * 60);
-      upStatus("上传中 " + (i + 1) + "/" + total + " · " + Math.round((i + 1) / total * 100) + "%");
+      if (!ok) throw lastErr || new Error("上传失败");
+
+      const pct = Math.round((i + 1) / total * 60);
+      upSetProgress(pct);
+      const elapsed = (Date.now() - upState.startedAt) / 1000;
+      upStatus("上传中 " + (i + 1) + "/" + total + " · " + pct + "% · 已用 " + elapsed.toFixed(0) + "s");
     }
 
+    upState.uploadId = null;
     upSetProgress(62);
     upStatus("上传完成，开始解析…");
-    const start = await fetch(UPLOAD_ENDPOINT + "/parse", {
+    const start = await upFetch(UPLOAD_ENDPOINT + "/parse", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-upload-code": code },
       body: JSON.stringify({ uploadId }),
-    });
-    const startData = await start.json().catch(() => ({}));
-    if (!start.ok) throw new Error(startData.error || "无法开始解析");
-    upLog("任务已创建：" + startData.jobId);
+    }, 60000);
+    if (start.res.status === 401) throw new Error("口令错误，请检查后重试");
+    if (!start.res.ok) throw new Error(start.data.error || "无法开始解析");
+    $("upCancel").hidden = true;
+    upLog("任务已创建：" + start.data.jobId);
 
-    const jobId = startData.jobId;
-    const t0 = Date.now();
+    const jobId = start.data.jobId;
     let lastStage = "";
     while (true) {
-      if (Date.now() - t0 > 10 * 60 * 1000) throw new Error("解析超时");
+      if (upState.cancelled) return;
+      if (Date.now() - upState.startedAt > 15 * 60 * 1000) throw new Error("解析超时，请稍后重试");
       await new Promise(r => setTimeout(r, 1500));
-      const res = await fetch(UPLOAD_ENDPOINT + "/status?jobId=" + encodeURIComponent(jobId));
-      const data = await res.json().catch(() => ({}));
+      const { res, data } = await upFetch(
+        UPLOAD_ENDPOINT + "/status?jobId=" + encodeURIComponent(jobId), {}, 40000);
       if (!res.ok) throw new Error(data.error || "查询状态失败");
       if (data.stage && data.stage !== lastStage) {
         lastStage = data.stage;
         upLog(data.stage);
       }
-      upSetProgress(data.state === "done" ? 100 : Math.min(95, 62 + (Date.now() - t0) / 1000 * 2));
-      upStatus(data.state === "done" ? "完成" : (data.stage || "处理中"));
+      const elapsed = ((Date.now() - upState.startedAt) / 1000).toFixed(0);
+      upSetProgress(data.state === "done" ? 100 : Math.min(95, 62 + Number(elapsed) * 0.4));
+      upStatus(data.state === "done" ? "完成" : (data.stage || "处理中") + " · 已用 " + elapsed + "s");
       if (data.state === "done") {
         const r = data.result || {};
         if (r.skipped) {
           upLog("比赛 " + r.matchId + " 已存在，未重复解析", "ok");
           upStatus("已存在，无需重复上传");
-          break;
+          upFinish();
+          return;
         }
         upLog("比赛 " + r.matchId + " 解析成功，当前共 " + r.matchCount + " 场", "ok");
-        upStatus("完成。3 秒后自动刷新页面…");
-        setTimeout(() => {
-          const u = new URL(location.href);
-          u.searchParams.set("v", Date.now());
-          location.href = u.toString();
-        }, 3000);
-        break;
+        upStatus("完成");
+        const dur = Math.floor((r.duration || 0) / 60) + ":" +
+          String((r.duration || 0) % 60).padStart(2, "0");
+        const win = r.winner === "radiant" ? "天辉胜" : "夜魇胜";
+        const ver = Date.now();
+        upResult(
+          "<div><b>比赛 " + r.matchId + "</b> 解析完成 · " + dur + " · " + win +
+          " · 当前共 " + r.matchCount + " 场</div>" +
+          '<div style="margin-top:6px">' +
+          '<a href="?v=' + ver + "#match=" + r.matchId + '">查看本场明细</a>' +
+          ' · <a href="?v=' + ver + '">刷新主页</a></div>'
+        );
+        upFinish();
+        return;
       }
       if (data.state === "error") throw new Error(data.message || "解析失败");
     }
   } catch (err) {
-    upLog(String(err.message || err), "err");
-    upStatus("失败");
+    if (!upState.cancelled) {
+      upLog(upFriendlyError(err.message || err), "err");
+      upStatus("失败");
+    }
   } finally {
-    upState.busy = false;
-    $("upStart").disabled = !upState.file;
+    if (!upState.cancelled) upFinish();
   }
 }
 
@@ -1590,11 +1818,13 @@ def main():
     players, match_count = collect_players()
     ai_endpoint = ""
     upload_endpoint = ""
+    upload_hint = "口令见群公告，或向群主索要。"
     try:
         with open(os.path.join(REPLAY_ROOT, "cloudbase.json"), encoding="utf-8") as fp:
             conf = json.load(fp)
         ai_endpoint = conf.get("ai_endpoint", "")
         upload_endpoint = conf.get("upload_endpoint", "")
+        upload_hint = conf.get("upload_hint", upload_hint)
     except (OSError, json.JSONDecodeError):
         pass
     data_path = os.path.join(DOCS_DIR, "data", "matches.js")
@@ -1606,6 +1836,7 @@ def main():
             .replace("__TIME__", datetime.now().strftime("%Y-%m-%d %H:%M"))
             .replace("__AI_ENDPOINT__", json.dumps(ai_endpoint))
             .replace("__UPLOAD_ENDPOINT__", json.dumps(upload_endpoint))
+            .replace("__UPLOAD_HINT__", json.dumps(upload_hint, ensure_ascii=False))
             .replace("__DATA_VER__", data_ver))
     os.makedirs(DOCS_DIR, exist_ok=True)
     out = os.path.join(DOCS_DIR, "index.html")

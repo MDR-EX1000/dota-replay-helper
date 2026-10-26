@@ -217,6 +217,9 @@ def main():
     if not os.path.isdir(os.path.join(ROOT, "docs")):
         print("当前目录不是 replay 仓库（缺少 docs/）")
         return 1
+    if args.deploy and not load_api_key():
+        print("缺少 cloudbase.apikey，部署后的服务无法自动发布，已中止")
+        return 1
     code = build(args.data_root)
     if code or not args.deploy:
         return code
