@@ -50,6 +50,33 @@ def sync_state():
     return len(ids)
 
 
+def pull_state(tcb, env_id):
+    """把网页上传、只存在云端的比赛补回本地 json/（不覆盖本地原始文件）。"""
+    tmp = os.path.join(ROOT, ".state_pull")
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(tmp, exist_ok=True)
+    try:
+        r = subprocess.run(
+            [tcb, "hosting", "download", "state", tmp, "--dir", "-e", env_id],
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            return 0
+        added = 0
+        for name in os.listdir(tmp):
+            if not (name.startswith("match_") and name.endswith(".json")):
+                continue
+            if name.endswith("_raw.json"):
+                continue
+            dst = os.path.join(JSON_DIR, name)
+            if not os.path.isfile(dst):
+                shutil.copy2(os.path.join(tmp, name), dst)
+                added += 1
+        return added
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def load_secret():
     """优先读环境变量，其次读本地 cloudbase.secret.json（不提交）。"""
     sid = os.environ.get("TENCENTCLOUD_SECRET_ID")
@@ -96,7 +123,22 @@ def main():
     except Exception as exc:
         print(f"  扫描失败，继续使用现有 JSON: {exc}")
 
-    print("2/4 生成统计与网页…")
+    tcb = shutil.which("tcb")
+    if not tcb:
+        print("未找到 tcb 命令，请先安装：npm i -g @cloudbase/cli")
+        return 1
+
+    if not ensure_login(tcb):
+        print("自动登录失败，请检查 cloudbase.secret.json 或先手动 tcb login")
+        return 1
+
+    added = pull_state(tcb, env_id)
+    if added:
+        print(f"2/4 从云端补回 {added} 场网页上传的比赛…")
+    else:
+        print("2/4 云端没有需要补回的比赛")
+
+    print("3/4 生成统计与网页…")
     for script in ("stats.py", "make_web.py"):
         subprocess.run([sys.executable, os.path.join(ROOT, script)], cwd=ROOT, check=True)
 
@@ -114,16 +156,7 @@ def main():
         print("检测到 SteamID 泄露，终止发布")
         return 1
 
-    tcb = shutil.which("tcb")
-    if not tcb:
-        print("未找到 tcb 命令，请先安装：npm i -g @cloudbase/cli")
-        return 1
-
-    if not ensure_login(tcb):
-        print("自动登录失败，请检查 cloudbase.secret.json 或先手动 tcb login")
-        return 1
-
-    print("3/4 上传到腾讯云…")
+    print("4/4 上传到腾讯云…")
     r = subprocess.run(
         [tcb, "hosting", "deploy", "state", "state", "-e", env_id],
         cwd=ROOT,
@@ -142,7 +175,7 @@ def main():
         return 1
 
     domain = conf.get("domain", "")
-    print("4/4 完成")
+    print("完成")
     if domain:
         print(f"\n访问地址: {domain}")
     else:

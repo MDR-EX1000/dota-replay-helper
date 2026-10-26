@@ -50,3 +50,6 @@ upload_code.txt
 
 # 云端解析服务的脱敏数据（运行时生成）
 state/
+
+# 发布前临时下载云端状态
+.state_pull/
