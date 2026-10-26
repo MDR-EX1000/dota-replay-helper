@@ -33,8 +33,10 @@ def main():
     size = os.path.getsize(path)
     total = (size + CHUNK - 1) // CHUNK
     upload_id = os.urandom(16).hex()
+    force = len(sys.argv) > 4 and sys.argv[4] == "force"
 
-    print(f"上传 {name} ({size/1024/1024:.0f}MB, {total} 片) -> {endpoint}")
+    print(f"上传 {name} ({size/1024/1024:.0f}MB, {total} 片) -> {endpoint}"
+          + (" [force]" if force else ""))
     with open(path, "rb") as fp:
         for i in range(total):
             chunk = fp.read(CHUNK)
@@ -46,6 +48,8 @@ def main():
                 "x-chunk-total": str(total),
                 "x-file-name": name,
             }
+            if force:
+                headers["x-force"] = "1"
             status, data = post(endpoint + "/upload", chunk, headers)
             if status != 200:
                 print("上传失败", status, data)
@@ -54,7 +58,7 @@ def main():
 
     status, data = post(
         endpoint + "/parse",
-        json.dumps({"uploadId": upload_id}).encode(),
+        json.dumps({"uploadId": upload_id, "force": force}).encode(),
         {"Content-Type": "application/json", "x-upload-code": code},
     )
     print("开始解析:", status, data)

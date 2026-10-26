@@ -332,10 +332,11 @@ async function publishDocs() {
 /* 解析流水线                                                          */
 /* ------------------------------------------------------------------ */
 
-function createJob(uploadId) {
+function createJob(uploadId, force) {
   const job = {
     id: crypto.randomBytes(9).toString('hex'),
     uploadId,
+    force: Boolean(force),
     state: 'queued',
     stage: '排队中',
     message: '',
@@ -383,8 +384,8 @@ async function processJob(job) {
   const matchId = upload.name.replace(/\.dem$/i, '');
   const demPath = path.join(upload.dir, 'upload.dem');
 
-  // 按比赛 ID 去重：已解析过的直接跳过（不重复解析、不重复发布）
-  if (listMatchIds().includes(matchId)) {
+  // 按比赛 ID 去重：已解析过的直接跳过（重新解析需显式 force）
+  if (!job.force && listMatchIds().includes(matchId)) {
     fs.rm(upload.dir, { recursive: true, force: true }, () => {});
     uploads.delete(job.uploadId);
     job.state = 'done';
@@ -529,8 +530,9 @@ async function handleUpload(req, res) {
     return json(res, 400, { error: '文件名必须是比赛 ID，例如 9061520546.dem' });
   }
 
-  // 第一片就检查 ID 是否已存在，避免白传 100MB
-  if (index === 0 && !uploads.has(uploadId)) {
+  // 第一片就检查 ID 是否已存在，避免白传 100MB（force 时跳过）
+  const force = req.headers['x-force'] === '1';
+  if (!force && index === 0 && !uploads.has(uploadId)) {
     const matchId = name.replace(/\.dem$/i, '');
     if (listMatchIds().includes(matchId)) {
       return json(res, 409, {
@@ -580,7 +582,7 @@ async function handleParse(req, res) {
     return json(res, 400, { error: `分片未上传完整（${upload.received.size}/${upload.total}）` });
   }
 
-  const job = createJob(uploadId);
+  const job = createJob(uploadId, payload.force);
   return json(res, 202, { jobId: job.id });
 }
 

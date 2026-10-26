@@ -299,6 +299,9 @@ TEMPLATE = r"""<!DOCTYPE html>
   .up-service.ok { color:#4ec9a5; }
   .up-service.err { color:#e06666; }
   .upload-hint-line { color:var(--muted); font-size:11.5px; margin:-6px 0 10px; }
+  .up-force { display:flex; align-items:center; gap:6px; font-size:12px;
+              color:var(--muted); margin:-2px 0 10px; cursor:pointer; }
+  .up-force input { width:auto; margin:0; }
   .upload-drop { display:flex; align-items:center; justify-content:center; border:1px dashed #3a4152;
                  border-radius:10px; padding:22px; cursor:pointer; color:var(--muted);
                  font-size:13px; margin-bottom:12px; }
@@ -398,6 +401,8 @@ TEMPLATE = r"""<!DOCTYPE html>
       <label class="up-remember"><input id="upRemember" type="checkbox"> 记住</label>
     </div>
     <div class="upload-hint-line" id="upCodeHint"></div>
+    <label class="up-force"><input id="upForce" type="checkbox">
+      重新解析已存在的比赛（会覆盖旧数据，解析器更新后使用）</label>
 
     <label class="upload-drop" id="upDrop">
       <input id="upFile" type="file" accept=".dem">
@@ -1522,6 +1527,7 @@ function warmUpUpload() { checkService(false); }
 
 async function checkExists() {
   if (!upState.file || !upCode() || !UPLOAD_ENDPOINT) return;
+  if ($("upForce").checked) return;
   const matchId = upState.file.name.replace(/\.dem$/i, "");
   try {
     const { res, data } = await upFetch(UPLOAD_ENDPOINT + "/check", {
@@ -1558,8 +1564,12 @@ function pickFile(f) {
   upState.file = f;
   $("upFileName").textContent = f.name + " · " + (f.size / 1024 / 1024).toFixed(1) + " MB";
   $("upStart").disabled = false;
-  upStatus("已选择，点「开始上传并解析」");
-  checkExists();
+  if ($("upForce").checked) {
+    upStatus("已选择（将覆盖同名比赛），点「开始上传并解析」");
+  } else {
+    upStatus("已选择，点「开始上传并解析」");
+    checkExists();
+  }
 }
 
 function initUploadTab() {
@@ -1600,6 +1610,14 @@ function initUploadTab() {
   });
 
   $("upCode").addEventListener("blur", () => { if (upCode()) checkExists(); });
+
+  $("upForce").addEventListener("change", () => {
+    if ($("upForce").checked) {
+      upStatus(upState.file ? "已选择（将覆盖同名比赛），点「开始上传并解析」" : "勾选后上传会覆盖同名比赛");
+    } else if (upState.file) {
+      checkExists();
+    }
+  });
 
   $("upStart").addEventListener("click", () => {
     if (upState.busy) return;
@@ -1651,11 +1669,12 @@ async function uploadAndParse(file, code) {
   checkService(false);
 
   try {
+    const forceParse = $("upForce").checked;
     const uploadId = [...crypto.getRandomValues(new Uint8Array(16))]
       .map(b => b.toString(16).padStart(2, "0")).join("");
     upState.uploadId = uploadId;
     const total = Math.ceil(file.size / UP_CHUNK);
-    upLog("开始上传 " + total + " 个分片…");
+    upLog((forceParse ? "重新解析模式：" : "") + "开始上传 " + total + " 个分片…");
 
     for (let i = 0; i < total; i++) {
       if (upState.cancelled) return;
@@ -1664,16 +1683,18 @@ async function uploadAndParse(file, code) {
       let ok = false;
       for (let attempt = 1; attempt <= UP_MAX_RETRY && !upState.cancelled; attempt++) {
         try {
+          const chunkHeaders = {
+            "Content-Type": "application/octet-stream",
+            "x-upload-code": code,
+            "x-upload-id": uploadId,
+            "x-chunk-index": String(i),
+            "x-chunk-total": String(total),
+            "x-file-name": file.name,
+          };
+          if (forceParse) chunkHeaders["x-force"] = "1";
           const { res, data } = await upFetch(UPLOAD_ENDPOINT + "/upload", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/octet-stream",
-              "x-upload-code": code,
-              "x-upload-id": uploadId,
-              "x-chunk-index": String(i),
-              "x-chunk-total": String(total),
-              "x-file-name": file.name,
-            },
+            headers: chunkHeaders,
             body: blob,
           }, 120000);
           if (res.status === 409 && data.code === "EXISTS") {
@@ -1711,7 +1732,7 @@ async function uploadAndParse(file, code) {
     const start = await upFetch(UPLOAD_ENDPOINT + "/parse", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-upload-code": code },
-      body: JSON.stringify({ uploadId }),
+      body: JSON.stringify({ uploadId, force: forceParse }),
     }, 60000);
     if (start.res.status === 401) throw new Error("口令错误，请检查后重试");
     if (!start.res.ok) throw new Error(start.data.error || "无法开始解析");
