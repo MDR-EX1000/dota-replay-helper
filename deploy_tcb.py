@@ -9,6 +9,7 @@
 用法: 双击 一键发布到腾讯云.bat，或 python deploy_tcb.py
 """
 
+import hashlib
 import json
 import os
 import re
@@ -23,6 +24,30 @@ CONFIG = os.path.join(ROOT, "cloudbase.json")
 SECRET = os.path.join(ROOT, "cloudbase.secret.json")
 JSON_DIR = os.path.join(ROOT, "json")
 STATE_DIR = os.path.join(ROOT, "state")
+
+# 参与页面生成的配置；只同步哈希，不同步内容（其中含 SteamID）
+CONFIG_FILES = [
+    "aliases.json",
+    "baselines.json",
+    "mmr.json",
+    "hero_names_zh.json",
+    "ability_names_zh.json",
+    "item_names_zh.json",
+    "item_aliases.json",
+    "item_ids.json",
+    "item_costs.json",
+]
+
+
+def config_hash():
+    h = hashlib.sha256()
+    for name in CONFIG_FILES:
+        h.update(name.encode("utf-8"))
+        path = os.path.join(ROOT, name)
+        if os.path.isfile(path):
+            with open(path, "rb") as fp:
+                h.update(fp.read())
+    return h.hexdigest()
 
 
 def sync_state():
@@ -44,10 +69,35 @@ def sync_state():
         with open(os.path.join(STATE_DIR, name), "w", encoding="utf-8") as fp:
             json.dump(data, fp, ensure_ascii=False)
         ids.append(name[6:-5])
-    index = {"ids": sorted(ids), "updates": {"at": "", "count": len(ids)}}
+    index = {
+        "ids": sorted(ids),
+        "config_hash": config_hash(),
+        "updates": {"at": "", "count": len(ids)},
+    }
     with open(os.path.join(STATE_DIR, "index.json"), "w", encoding="utf-8") as fp:
         json.dump(index, fp, ensure_ascii=False, indent=2)
     return len(ids)
+
+
+def remote_index(tcb, env_id):
+    """读取云端 state/index.json（用于发布前检查竞态）。"""
+    tmp = os.path.join(ROOT, ".state_index.json")
+    try:
+        r = subprocess.run(
+            [tcb, "hosting", "download", "state/index.json", tmp, "-e", env_id],
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        if r.returncode != 0 or not os.path.isfile(tmp):
+            return None
+        with open(tmp, encoding="utf-8") as fp:
+            return json.load(fp)
+    except (OSError, json.JSONDecodeError):
+        return None
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 def pull_state(tcb, env_id):
@@ -155,6 +205,21 @@ def main():
     if "steamid" in data_text or re.search(r"7656119\d{10}", data_text):
         print("检测到 SteamID 泄露，终止发布")
         return 1
+
+    remote = remote_index(tcb, env_id)
+    if remote:
+        local_ids = {
+            name[6:-5] for name in os.listdir(JSON_DIR)
+            if name.startswith("match_") and name.endswith(".json")
+            and not name.endswith("_raw.json")
+        }
+        missing = [str(i) for i in remote.get("ids", []) if str(i) not in local_ids]
+        if missing:
+            print(
+                "云端有本地还没有的比赛（%s）；可能有网页上传刚完成，"
+                "请重新运行发布以补回后再上传" % ", ".join(missing[:5])
+            )
+            return 1
 
     print("4/4 上传到腾讯云…")
     r = subprocess.run(

@@ -57,10 +57,37 @@ const uploads = new Map(); // uploadId -> { dir, name, total, received:Set, crea
 const jobs = new Map(); // jobId -> job
 const jobQueue = [];
 let jobRunning = false;
+// 参与页面生成的配置（与 deploy_tcb.py 的 CONFIG_FILES 保持一致）
+const CONFIG_FILES = [
+  'aliases.json',
+  'baselines.json',
+  'mmr.json',
+  'hero_names_zh.json',
+  'ability_names_zh.json',
+  'item_names_zh.json',
+  'item_aliases.json',
+  'item_ids.json',
+  'item_costs.json',
+];
+
+function configHash() {
+  const h = crypto.createHash('sha256');
+  for (const name of CONFIG_FILES) {
+    h.update(name);
+    try {
+      h.update(fs.readFileSync(path.join(ROOT, name)));
+    } catch (_) { /* 缺失按空文件 */ }
+  }
+  return h.digest('hex');
+}
+
+const OWN_CONFIG_HASH = configHash();
+
 let tcbLoggedIn = false;
 let stateSynced = false;
 let stateRemote = false;
 let stateIncomplete = false;
+let configStale = false;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -299,6 +326,36 @@ async function syncStateFromCloud() {
   }
 }
 
+/**
+ * 只拉云端索引：用于发布前判断是否有别处刚发布、或本地配置是否落后。
+ * 不下载全部比赛数据，成本很小。
+ */
+async function refreshRemoteIndex() {
+  if (!(await ensureLogin())) return null;
+  const tmp = '/tmp/remote-state-index.json';
+  try { fs.unlinkSync(tmp); } catch (_) { /* ignore */ }
+  const r = await run(
+    'tcb',
+    ['hosting', 'download', 'state/index.json', tmp, '-e', ENV_ID],
+    { timeout: 60000 }
+  );
+  if (r.code !== 0 || !fs.existsSync(tmp)) return null;
+  try {
+    const idx = JSON.parse(fs.readFileSync(tmp, 'utf8'));
+    const ids = Array.isArray(idx.ids) ? idx.ids.map(String) : [];
+    const local = new Set(listMatchIds());
+    const missing = ids.filter((id) => !local.has(id));
+    stateIncomplete = missing.length > 0;
+    if (missing.length) console.error('云端有本地缺失的比赛:', missing.join(','));
+    configStale = Boolean(idx.config_hash) && idx.config_hash !== OWN_CONFIG_HASH;
+    stateRemote = true;
+    return { ids, configHash: idx.config_hash || null };
+  } catch (err) {
+    console.error('解析云端索引失败:', err.message);
+    return null;
+  }
+}
+
 async function publishState() {
   const r = await run('tcb', ['hosting', 'deploy', 'state', 'state', '-e', ENV_ID], { timeout: 180000 });
   if (r.code !== 0) throw new Error('上传 state 失败: ' + (r.err || r.out).slice(-400));
@@ -401,6 +458,18 @@ async function processJob(job) {
     return;
   }
 
+  stage(job, '检查云端配置');
+  await refreshRemoteIndex();
+  if (stateIncomplete) {
+    throw new Error('云端比赛数据与本地不一致，已拒绝发布；请重新部署上传服务或重试');
+  }
+  if (configStale) {
+    throw new Error(
+      '云端配置（MMR/别名/基准等）与镜像不一致，已拒绝发布。'
+      + '请先运行 python build_cloudrun.py --deploy 更新上传服务，再重试'
+    );
+  }
+
   stage(job, '合并分片');
   const out = fs.createWriteStream(demPath);
   for (let i = 0; i < upload.total; i++) {
@@ -471,6 +540,13 @@ async function processJob(job) {
   }
 
   if (!SKIP_PUBLISH) {
+    await refreshRemoteIndex();
+    if (stateIncomplete) {
+      throw new Error('发布前发现云端有本地缺少的比赛，已中止；请重新部署上传服务');
+    }
+    if (configStale) {
+      throw new Error('发布前发现云端配置已更新，已中止；请先更新上传服务镜像');
+    }
     const localCount = listMatchIds().length;
     const remoteCount = await remoteMatchCount();
     if (remoteCount !== null && remoteCount > localCount) {
@@ -650,6 +726,7 @@ const server = http.createServer(async (req, res) => {
         maxBytes: MAX_FILE_BYTES,
         chunkBytes: MAX_CHUNK_BYTES,
         state: { remote: stateRemote, incomplete: stateIncomplete },
+        configStale,
         env: ENV_ID,
       });
     }
@@ -686,6 +763,7 @@ server.listen(PORT, '0.0.0.0', async () => {
     await ensureLogin();
     await ensureUploadEndpoint();
     await syncStateFromCloud();
+    await refreshRemoteIndex();
   } catch (err) {
     console.error('启动初始化失败:', err.message);
   }
