@@ -1,6 +1,7 @@
 # Dota 2 对黑助手
 
 本地解析 Dota 2 重放（`.dem`），统计玩家数据、计算评分，并按规则生成 5v5 对黑阵容。
+也可以在网页上直接上传 `.dem`，由云端自动解析并发布。
 
 ## 数据流
 
@@ -22,6 +23,11 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
                             │
                             ▼
                  DeepSeek（deepseek-flash）
+
+网页「上传录像」→ 云托管 dota-upload（分片上传 + Linux 解析器）
+                            │
+                            ├── state/（脱敏比赛数据，持久化）
+                            └── 重建 docs/ → 自动发布静态托管
 ```
 
 ## 目录
@@ -37,6 +43,9 @@ replay/
 ├── deploy_tcb.py              # 腾讯云静态发布（发布前自动扫描新录像）
 ├── scan_new.py                # 扫描 replays 目录，解析新增练习赛
 ├── deploy_ai.py               # 部署 AI 云函数
+├── build_cloudrun.py          # 组装并部署上传/解析服务（云托管）
+├── upload_service/            # 上传/解析服务源码（Node + Dockerfile）
+├── state/                     # 脱敏比赛数据（云端解析服务持久化，git 忽略）
 ├── cloudfunctions/roll-ai/    # DeepSeek 代理云函数
 ├── cloudbaserc.example.json   # 云函数配置模板（真实配置不入库）
 ├── cloudbase.json             # 环境 ID、访问域名、AI 端点
@@ -153,6 +162,34 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 ```
 
 它会从 `~/.claude/settings.json` 读取当前 DeepSeek Key，部署云函数，更新 `ai_endpoint` 并重新发布网页。真实配置写入本地的 `cloudbaserc.json`（已在 `.gitignore`）。
+
+## 上传录像（网页）
+
+统计页顶部新增「上传录像」Tab：
+
+1. 从 Dota 2 客户端下载重放，文件名为比赛 ID（如 `9061520546.dem`）
+2. 输入上传口令 `zgnb`
+3. 选择文件后自动分片上传（4MB/片），进度条显示上传与解析阶段
+4. 解析成功约 20–40 秒，页面自动刷新，统计与比赛明细同步更新
+
+限制与行为：
+
+- 只接受练习赛（`lobby_type=1`、10 人、时长 > 0）
+- 单文件上限 300MB，口令错误直接拒绝
+- 解析成功后删除云端录像分片，只保留脱敏比赛数据（`state/`）
+- 失败不会写入统计，也不会发布
+
+服务端代码在 `upload_service/server.js`，镜像由云端构建：
+
+```bash
+python build_cloudrun.py --deploy   # 组装 + 提交云端构建部署
+```
+
+首次启动时服务会把自己的公网域名写进 `cloudbase.json` 的 `upload_endpoint`，
+`make_web.py` 生成页面时注入该地址。
+
+安全说明：`cloudbase.apikey`、上传口令和密钥都在 `cloudrun_build/app/secrets.json`，
+只进入私有镜像，不提交 git。若泄露，请重新生成 CloudBase API Key 后重新部署。
 
 ## 手动运行（调试用）
 
