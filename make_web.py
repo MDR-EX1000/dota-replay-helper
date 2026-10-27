@@ -15,7 +15,7 @@
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import balance
 import make_match_data
@@ -1854,7 +1854,7 @@ def main():
     html = (TEMPLATE
             .replace("__DATA__", json.dumps(players, ensure_ascii=False))
             .replace("__MATCHES__", str(match_count))
-            .replace("__TIME__", datetime.now().strftime("%Y-%m-%d %H:%M"))
+            .replace("__TIME__", datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M"))
             .replace("__AI_ENDPOINT__", json.dumps(ai_endpoint))
             .replace("__UPLOAD_ENDPOINT__", json.dumps(upload_endpoint))
             .replace("__UPLOAD_HINT__", json.dumps(upload_hint, ensure_ascii=False))

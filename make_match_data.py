@@ -8,7 +8,7 @@
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 JSON_DIR = os.path.join(ROOT, "json")
@@ -260,7 +260,7 @@ def transform_match(m):
     return {
         "id": str(m.get("match_id", "")),
         "start": start,
-        "date": datetime.fromtimestamp(start).strftime("%Y-%m-%d %H:%M") if start else "",
+        "date": datetime.fromtimestamp(start, timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M") if start else "",
         "duration": m.get("duration", 0),
         "mode": MODE_ZH.get(m.get("game_mode"), m.get("game_mode_name", "")),
         "mode_en": m.get("game_mode_name", ""),
@@ -298,7 +298,7 @@ def build():
     matches.sort(key=lambda x: (x.get("start", 0), x.get("id", "")), reverse=True)
     data = {
         "version": 1,
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "generated_at": datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M"),
         "matches": matches,
     }
     text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
