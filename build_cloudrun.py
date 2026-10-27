@@ -8,7 +8,7 @@
 
 数据来源:
     --data-root 指定含 json/ 的仓库目录，默认 C:/Users/admin/Desktop/replay
-    比赛 JSON 会去掉 steamid 后再打包，镜像和线上都不会出现 SteamID。
+    比赛 JSON 原样打包（保留 SteamID），镜像和云端 state 都不脱敏。
 
 口令:
     环境变量 UPLOAD_CODE，或本地 upload_code.txt，默认 zgnb。
@@ -45,6 +45,31 @@ APP_FILES = [
 SERVICE_NAME = "dota-upload"
 ENV_ID = "unhappy-grouse-d3gsbs7inb2cb10d6"
 
+# 参与页面生成的配置；与 deploy_tcb.py / upload_service/server.js 保持一致
+CONFIG_FILES = [
+    "aliases.json",
+    "baselines.json",
+    "mmr.json",
+    "hero_names_zh.json",
+    "ability_names_zh.json",
+    "item_names_zh.json",
+    "item_aliases.json",
+    "item_ids.json",
+    "item_costs.json",
+]
+
+
+def config_hash():
+    import hashlib
+    h = hashlib.sha256()
+    for name in CONFIG_FILES:
+        h.update(name.encode("utf-8"))
+        path = os.path.join(ROOT, name)
+        if os.path.isfile(path):
+            with open(path, "rb") as fp:
+                h.update(fp.read())
+    return h.hexdigest()
+
 
 def load_api_key():
     path = os.path.join(ROOT, "cloudbase.apikey")
@@ -63,13 +88,6 @@ def load_upload_code():
         with open(path, encoding="utf-8") as fp:
             return fp.read().strip()
     return "zgnb"
-
-
-def sanitize(data):
-    for p in data.get("players", []):
-        p.pop("steamid", None)
-    data.pop("steamid", None)
-    return data
 
 
 def copy(src, dst):
@@ -138,19 +156,16 @@ def build(data_root):
                 continue
             if name.endswith("_raw.json"):
                 continue
-            with open(os.path.join(json_src, name), encoding="utf-8") as fp:
-                data = json.load(fp)
-            data = sanitize(data)
-            text = json.dumps(data, ensure_ascii=False)
-            for target in (os.path.join(app, "json", name), os.path.join(app, "state", name)):
-                with open(target, "w", encoding="utf-8") as fp:
-                    fp.write(text)
+            src = os.path.join(json_src, name)
+            shutil.copy2(src, os.path.join(app, "json", name))
+            shutil.copy2(src, os.path.join(app, "state", name))
             ids.append(name[6:-5])
     else:
         print(f"[警告] {json_src} 不存在，镜像内没有历史比赛")
 
     index = {
         "ids": sorted(ids),
+        "config_hash": config_hash(),
         "updates": {"at": "", "count": len(ids)},
     }
     with open(os.path.join(app, "state", "index.json"), "w", encoding="utf-8") as fp:

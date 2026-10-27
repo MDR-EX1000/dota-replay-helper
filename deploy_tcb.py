@@ -51,7 +51,7 @@ def config_hash():
 
 
 def sync_state():
-    """把比赛 JSON 脱敏后写成云端解析服务使用的 state（不含 SteamID）。"""
+    """把比赛 JSON 原样同步到云端解析服务使用的 state（保留 SteamID）。"""
     if os.path.isdir(STATE_DIR):
         shutil.rmtree(STATE_DIR)
     os.makedirs(STATE_DIR)
@@ -61,13 +61,7 @@ def sync_state():
             continue
         if name.endswith("_raw.json"):
             continue
-        with open(os.path.join(JSON_DIR, name), encoding="utf-8") as fp:
-            data = json.load(fp)
-        for p in data.get("players", []):
-            p.pop("steamid", None)
-        data.pop("steamid", None)
-        with open(os.path.join(STATE_DIR, name), "w", encoding="utf-8") as fp:
-            json.dump(data, fp, ensure_ascii=False)
+        shutil.copy2(os.path.join(JSON_DIR, name), os.path.join(STATE_DIR, name))
         ids.append(name[6:-5])
     index = {
         "ids": sorted(ids),

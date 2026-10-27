@@ -157,7 +157,9 @@ def aggregate(matches):
             if canonical:
                 key = "alias:" + canonical
             else:
-                key = sid or raw_name or "unknown"
+                # 优先用昵称：云端脱敏数据没有 SteamID，本地原始数据有，
+                # 两种数据混在一起时不能因此把同一个人拆成两行。
+                key = raw_name or sid or "unknown"
             row = players.setdefault(key, {
                 "steamids": [],
                 "name": canonical or raw_name,

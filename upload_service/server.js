@@ -177,15 +177,6 @@ function listMatchIds() {
   }
 }
 
-function sanitize(obj) {
-  const copy = JSON.parse(JSON.stringify(obj));
-  for (const p of copy.players || []) {
-    delete p.steamid;
-  }
-  delete copy.steamid;
-  return copy;
-}
-
 function loadIndex() {
   const file = path.join(STATE_DIR, 'index.json');
   try {
@@ -198,6 +189,7 @@ function loadIndex() {
 function writeIndex(ids) {
   const payload = {
     ids: [...ids].sort(),
+    config_hash: OWN_CONFIG_HASH,
     updates: { at: new Date().toISOString(), count: ids.length },
   };
   fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -518,9 +510,10 @@ async function processJob(job) {
   }
 
   stage(job, '写入比赛数据');
-  const clean = sanitize(data);
+  // 云端不脱敏：保留 SteamID，方便按账号匹配别名/MMR
+  await fsp.writeFile(jsonPath, JSON.stringify(data));
   fs.mkdirSync(STATE_DIR, { recursive: true });
-  await fsp.writeFile(path.join(STATE_DIR, `match_${matchId}.json`), JSON.stringify(clean));
+  await fsp.writeFile(path.join(STATE_DIR, `match_${matchId}.json`), JSON.stringify(data));
   const ids = listMatchIds();
   if (!ids.includes(String(matchId))) ids.push(String(matchId));
   writeIndex(ids);

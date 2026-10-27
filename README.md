@@ -26,7 +26,7 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 
 网页「上传录像」→ 云托管 dota-upload（分片上传 + Linux 解析器）
                             │
-                            ├── state/（脱敏比赛数据，持久化）
+                            ├── state/（比赛数据持久化，含 SteamID）
                             └── 重建 docs/ → 自动发布静态托管
 ```
 
@@ -44,12 +44,13 @@ replay/
 ├── scan_new.py                # 扫描 replays 目录，解析新增练习赛
 ├── deploy_ai.py               # 部署 AI 云函数
 ├── build_cloudrun.py          # 组装并部署上传/解析服务（云托管）
+├── sync_cloud.py              # 把网页上传的比赛同步回本地（不发布）
 ├── upload_service/            # 上传/解析服务源码（Node + Dockerfile）
-├── state/                     # 脱敏比赛数据（云端解析服务持久化，git 忽略）
+├── state/                     # 云端解析服务持久化（含 SteamID，公开可读，git 忽略）
 ├── cloudfunctions/roll-ai/    # DeepSeek 代理云函数
 ├── cloudbaserc.example.json   # 云函数配置模板（真实配置不入库）
 ├── cloudbase.json             # 环境 ID、访问域名、AI 端点
-├── aliases.json               # 多账号合并（仅名字，不含 SteamID）
+├── aliases.json               # 多账号合并（名字与 SteamID 映射）
 ├── baselines.json             # 核心/酱油表现分基准
 ├── hero_names_zh.json         # 英雄英文 key → 中文名
 ├── mmr.json                   # 玩家 MMR 登记（默认空 = 未登记）
@@ -61,7 +62,7 @@ replay/
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
 ├── player_stats.csv / .html   # 本地汇总表（git 忽略）
 ├── manta/                     # 上游解析库（git 忽略）
-└── 四个一键 bat
+└── 五个一键 bat
 ```
 
 | 路径 | 说明 |
@@ -69,7 +70,8 @@ replay/
 | `stats.py` | 汇总玩家数据（胜率、KDA、GPM/XPM、伤害/经济等） |
 | `balance.py` | 计算 Elo + 表现分，枚举并排序 5v5 分法 |
 | `roll.py` | 规则化 roll（R1–R5），只在合格方案里随机 |
-| `make_web.py` | 生成四 Tab 网页到 `docs/index.html` |
+| `make_web.py` | 生成五 Tab 网页到 `docs/index.html` |
+| `sync_cloud.py` | 补回网页上传的比赛到本地 `json/`，不发布 |
 | `make_match_data.py` | 从比赛 JSON 生成 `docs/data/matches.js` |
 | `reparse_known.py` | 只重解析已有比赛，补齐事件/经济/装备时间线 |
 | `make_name_maps.py` | 从本地 VPK 生成中文装备/技能名 |
@@ -86,6 +88,7 @@ replay/
 | `一键打开网页.bat` | 重新生成并打开网页 |
 | `一键发布到腾讯云.bat` | 生成网页并上传到腾讯云 CloudBase |
 | `一键部署AI.bat` | 部署云函数、配置 Key、更新 AI 端点 |
+| `一键同步.bat` | 补回网页上传的比赛到本地（不发布） |
 
 ## 一键发布到腾讯云
 
@@ -183,12 +186,22 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 - 本地发布和网页上传都只接收练习赛，并按比赛 ID 去重。
 - 只生成不发布：`一键统计.bat`、`一键打开网页.bat`；只部署 AI：`一键部署AI.bat`（它最后也会走一次 `deploy_tcb.py`）。
 
+### 本地同步
+
+网页上传只写云端 `state/`。以下时机会自动补回本地 `json/`：
+
+- `一键发布到腾讯云.bat`：发布前同步
+- `一键统计.bat` / `一键打开网页.bat`：先生成统计，同步失败会跳过并继续
+- 手动：`python sync_cloud.py` 或 `一键同步.bat`
+
+同步只补本地缺失的比赛，不覆盖本地已有的原始 JSON，也不会自动发布。
+
 ## 上传录像（网页）
 
 统计页顶部新增「上传录像」Tab：
 
 1. 从 Dota 2 客户端下载重放，文件名为比赛 ID（如 `9061520546.dem`）
-2. 输入上传口令 `zgnb`，可勾选「记住」下次自动填
+2. 输入上传口令（见群公告），可勾选「记住」下次自动填
 3. 点击选择或把文件拖进上传区；选中后会先查重，已存在会直接提示
 4. 分片上传（4MB/片，失败自动重试 3 次），可随时取消
 5. 渲染完成后显示比赛卡片，可直接跳到本场明细
@@ -200,7 +213,7 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 
 - 只接受练习赛（`lobby_type=1`、10 人、时长 > 0）
 - 单文件上限 300MB，口令错误直接拒绝
-- 解析成功后删除云端录像分片，只保留脱敏比赛数据（`state/`）
+- 解析成功后删除云端录像分片，只保留比赛数据（`state/`，含 SteamID）
 - 失败不会写入统计，也不会发布
 
 服务端代码在 `upload_service/server.js`，镜像由云端构建：
@@ -279,9 +292,15 @@ mantatool\parse.exe "D:\...\replays\905xxxxxxx.dem"
 - `json/`：解析结果，含 SteamID
 - `player_stats.csv`：含 SteamID
 - `manta/`：上游解析库
-- `aliases.json` 中只保留玩家名映射，不含 SteamID
+- `aliases.json` / `mmr.json` / `stats.py` 含少量 SteamID（多账号与 MMR 登记用）
 
-公开的只有 `docs/index.html` 和 `docs/data/matches.js`，其中是玩家名、评分、比赛事件和统计，**不含 SteamID**。发布脚本会在上传前检查 `matches.js`，发现 SteamID 会终止发布。
+公开可读的有三类：
+
+- `docs/index.html`、`docs/data/matches.js`：玩家名、评分、比赛事件和统计，**不含 SteamID**
+- `state/match_*.json`：云端解析服务的完整比赛数据，**含 SteamID**（按当前配置不脱敏）
+- CloudBase 环境 ID 与公开接口地址
+
+发布脚本会在上传前检查 `matches.js`，发现 SteamID 会终止发布；`state/` 不在该检查范围内。
 
 AI 对话时，当前 10 人的玩家名、评分和统计会发送给 DeepSeek；不会发送 SteamID。DeepSeek Key 只保存在 CloudBase 云函数环境变量中，不进入页面和 git。
 
