@@ -9,6 +9,10 @@ import json
 import os
 import re
 from datetime import datetime, timedelta, timezone
+from player_data import IdentityResolver, metric
+from match_titles import assign_titles
+from web_safety import script_json
+import steam_profiles
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 JSON_DIR = os.path.join(ROOT, "json")
@@ -39,6 +43,10 @@ ITEM_ALIASES = load_json("item_aliases.json", {})
 ITEM_IDS = load_json("item_ids.json", {})
 ITEM_COSTS = load_json("item_costs.json", {})
 ABILITY_ZH = load_json("ability_names_zh.json", {})
+HERO_PORTRAITS = load_json(os.path.join("docs", "hero_portraits.json"), {}).get("heroes", {})
+ITEM_ICONS = load_json(os.path.join("docs", "item_icons.json"), {}).get("items", {})
+PUBLIC_FIELDS = {'level': 'level', 'kills': 'kills', 'deaths': 'deaths', 'assists': 'assists', 'net_worth': 'net_worth', 'gpm': 'gold_per_min', 'xpm': 'xp_per_min', 'last_hits': 'last_hits', 'denies': 'denies', 'hero_damage': 'hero_damage', 'hero_damage_taken': 'hero_damage_taken', 'tower_damage': 'tower_damage', 'healing': 'hero_healing', 'stuns': 'stuns', 'wards_placed': 'observer_sentry_wards', 'wards_destroyed': 'wards_destroyed'}
+
 
 
 def norm_hero(s):
@@ -105,80 +113,67 @@ def objective_label(kind, target, lane, tier):
 
 def team_totals(players, team):
     ps = [p for p in players if p["team"] == team]
-    return {
-        "kills": sum(p["kills"] for p in ps),
-        "deaths": sum(p["deaths"] for p in ps),
-        "assists": sum(p["assists"] for p in ps),
-        "net_worth": sum(p["net_worth"] for p in ps),
-        "hero_damage": sum(p["hero_damage"] for p in ps),
-        "hero_damage_taken": sum(p["hero_damage_taken"] for p in ps),
-        "tower_damage": sum(p["tower_damage"] for p in ps),
-        "healing": sum(p["healing"] for p in ps),
-        "stuns": round(sum(p["stuns"] for p in ps), 1),
-        "wards_placed": sum(p["wards_placed"] for p in ps),
-        "wards_destroyed": sum(p["wards_destroyed"] for p in ps),
-    }
+    fields = ("kills", "deaths", "assists", "net_worth", "hero_damage", "hero_damage_taken",
+              "tower_damage", "healing", "stuns", "wards_placed", "wards_destroyed")
+    return {key: round(sum(p[key] for p in ps), 1) if ps and all(p[key] is not None for p in ps) else None
+            for key in fields}
 
 
-def transform_match(m):
-    aliases = ALIASES
-    canonical = set(aliases.values())
-
-    def player_name(p):
-        raw = p.get("name", "")
-        sid = str(p.get("steamid", ""))
-        n = aliases.get(raw) or aliases.get(sid)
-        if not n and raw in canonical:
-            n = raw
-        return n or raw or sid
-
+def transform_match(m, resolver=None, profile_cache=None):
+    profile_cache = steam_profiles.read_cache() if profile_cache is None else profile_cache
+    resolver = resolver or IdentityResolver([m], ALIASES, load_json("legacy_identities.json", {}))
     players_out = []
-    for p in m.get("players", []):
+    for index, p in enumerate(m.get("players", [])):
         hero = norm_hero(p.get("hero") or p.get("hero_name", ""))
         items = []
-        for raw in p.get("items", []):
+        for raw in p.get("items") or []:
             k = item_key(raw)
-            items.append({"key": k, "zh": item_zh(k)})
+            items.append({"key": k, "zh": item_zh(k), "image": ITEM_ICONS.get(k, "")})
         abilities = []
-        for a in p.get("abilities", []):
+        for a in p.get("abilities") or []:
             k = a.get("name", "")
             if k:
                 abilities.append({"key": k, "zh": ability_zh(k), "level": a.get("level", 0)})
+        _, public_pid, display_name, identity_status = resolver.describe(p, m, index)
         players_out.append({
             "pid": p.get("player_id", 0),
             "slot": p.get("player_slot", 0),
             "team": p.get("team", ""),
-            "name": player_name(p),
+            "id": public_pid,
+            "avatar": steam_profiles.avatar_for(public_pid, profile_cache),
+            "identity_status": identity_status,
+            "name": display_name,
             "hero": hero,
             "hero_zh": hero_zh(hero),
-            "level": p.get("level", 0),
-            "kills": p.get("kills", 0),
-            "deaths": p.get("deaths", 0),
-            "assists": p.get("assists", 0),
-            "net_worth": p.get("net_worth", 0),
-            "gpm": p.get("gold_per_min", 0),
-            "xpm": p.get("xp_per_min", 0),
-            "last_hits": p.get("last_hits", 0),
-            "denies": p.get("denies", 0),
-            "hero_damage": p.get("hero_damage", 0),
-            "hero_damage_taken": p.get("hero_damage_taken", 0),
-            "tower_damage": p.get("tower_damage", 0),
-            "healing": p.get("hero_healing", 0),
-            "stuns": p.get("stuns", 0),
-            "wards_placed": p.get("observer_sentry_wards", 0),
-            "wards_destroyed": p.get("wards_destroyed", 0),
+            "hero_image": HERO_PORTRAITS.get(hero, ""),
+            "level": metric(p, "level"),
+            "kills": metric(p, "kills"),
+            "deaths": metric(p, "deaths"),
+            "assists": metric(p, "assists"),
+            "net_worth": metric(p, "net_worth"),
+            "gpm": metric(p, "gold_per_min"),
+            "xpm": metric(p, "xp_per_min"),
+            "last_hits": metric(p, "last_hits"),
+            "denies": metric(p, "denies"),
+            "hero_damage": metric(p, "hero_damage"),
+            "hero_damage_taken": metric(p, "hero_damage_taken"),
+            "tower_damage": metric(p, "tower_damage"),
+            "healing": metric(p, "hero_healing"),
+            "stuns": metric(p, "stuns"),
+            "wards_placed": metric(p, "observer_sentry_wards"),
+            "wards_destroyed": metric(p, "wards_destroyed"),
+            "missing_fields": [key for key, source in PUBLIC_FIELDS.items() if metric(p, source) is None],
+            "quality_verified": (p.get("data_quality") or {}).get("verified", False),
             "items": items,
             "abilities": abilities,
             "damage": p.get("damage"),
         })
 
-    score = {
-        "radiant": sum(p["kills"] for p in players_out if p["team"] == "radiant"),
-        "dire": sum(p["kills"] for p in players_out if p["team"] == "dire"),
-    }
+    score = {team: team_totals(players_out, team)["kills"] for team in ("radiant", "dire")}
+    awards = assign_titles(players_out, m)
 
     kills = []
-    for k in m.get("kills", []):
+    for k in m.get("kills") or []:
         killer = k.get("killer", "")
         victim = k.get("victim", "")
         assists = [{"key": a, "zh": unit_label(a)} for a in k.get("assists", []) if a and a != killer]
@@ -195,7 +190,7 @@ def transform_match(m):
         })
 
     objectives = []
-    for o in m.get("objectives", []):
+    for o in m.get("objectives") or []:
         kind = o.get("kind", "")
         target = o.get("target", "")
         lane = o.get("lane", "")
@@ -213,7 +208,7 @@ def transform_match(m):
         })
 
     purchases = []
-    for pu in m.get("purchases", []):
+    for pu in m.get("purchases") or []:
         item_id = pu.get("item_id")
         key = ITEM_IDS.get(str(item_id), "")
         if not key:
@@ -226,6 +221,7 @@ def transform_match(m):
             "hero_zh": hero_zh(pu.get("hero", "")),
             "item": key,
             "item_zh": item_zh(key),
+            "item_image": ITEM_ICONS.get(key, ""),
             "cost": ITEM_COSTS.get(key, 0),
             "recipe": key.startswith("recipe_"),
         })
@@ -240,8 +236,10 @@ def transform_match(m):
         for idx in range(len(times)):
             for team in ("radiant", "dire"):
                 vals_nw = [p for p in players_out if p["team"] == team]
-                g = sum(nw[p["pid"]][idx] for p in vals_nw if p["pid"] < len(nw) and idx < len(nw[p["pid"]]))
-                x = sum(xp[p["pid"]][idx] for p in vals_nw if p["pid"] < len(xp) and idx < len(xp[p["pid"]]))
+                def total_series(series):
+                    values = [series[p["pid"]][idx] if 0 <= p["pid"] < len(series) and idx < len(series[p["pid"]]) else None for p in vals_nw]
+                    return sum(values) if values and all(metric({"v": v}, "v") is not None for v in values) else None
+                g, x = total_series(nw), total_series(xp)
                 by_team[team]["gold"].append(g)
                 by_team[team]["xp"].append(x)
         economy = {
@@ -264,8 +262,9 @@ def transform_match(m):
         "duration": m.get("duration", 0),
         "mode": MODE_ZH.get(m.get("game_mode"), m.get("game_mode_name", "")),
         "mode_en": m.get("game_mode_name", ""),
-        "radiant_win": bool(m.get("radiant_win")),
-        "winner": "radiant" if m.get("radiant_win") else "dire",
+        "radiant_win": m.get("radiant_win"),
+        "winner": ("radiant" if m["radiant_win"] else "dire") if isinstance(m.get("radiant_win"), bool) else None,
+        "awards": awards,
         "score": score,
         "teams": {
             "radiant": team_totals(players_out, "radiant"),
@@ -279,33 +278,41 @@ def transform_match(m):
     }
 
 
-def build():
-    matches = []
-    for path in sorted(os.listdir(JSON_DIR)):
+def build(matches_dir=None, out_file=None):
+    matches_dir = matches_dir or JSON_DIR
+    out_file = out_file or OUT_FILE
+    raw_matches = []
+    for path in sorted(os.listdir(matches_dir)) if os.path.isdir(matches_dir) else []:
         if not (path.startswith("match_") and path.endswith(".json")):
             continue
         if path.endswith("_raw.json"):
             continue
         try:
-            with open(os.path.join(JSON_DIR, path), encoding="utf-8") as fp:
+            with open(os.path.join(matches_dir, path), encoding="utf-8") as fp:
                 m = json.load(fp)
         except (OSError, json.JSONDecodeError):
             continue
         if len(m.get("players", [])) != 10 or m.get("duration", 0) <= 0:
             continue
-        matches.append(transform_match(m))
+        raw_matches.append(m)
+
+    if not raw_matches:
+        raise ValueError("没有有效比赛，已保留现有网页数据")
+    resolver = IdentityResolver(raw_matches, ALIASES, load_json("legacy_identities.json", {}))
+    profiles = steam_profiles.read_cache()
+    matches = [transform_match(m, resolver, profiles) for m in raw_matches]
 
     matches.sort(key=lambda x: (x.get("start", 0), x.get("id", "")), reverse=True)
     data = {
-        "version": 1,
+        "version": 2,
         "generated_at": datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M"),
         "matches": matches,
     }
-    text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    text = script_json(data)
     if "steamid" in text or re.search(r"7656119\d{10}", text):
         raise SystemExit("refusing to publish SteamID data")
-    os.makedirs(OUT_DIR, exist_ok=True)
-    with open(OUT_FILE, "w", encoding="utf-8") as fp:
+    os.makedirs(os.path.dirname(os.path.abspath(out_file)), exist_ok=True)
+    with open(out_file, "w", encoding="utf-8") as fp:
         fp.write("window.MATCH_DATA = " + text + ";\n")
     return len(matches)
 

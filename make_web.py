@@ -2,40 +2,51 @@
 """
 生成对黑分组动态网页：Desktop/replay/index.html
 
-五个 Tab:
+六个 Tab:
     1. 数据统计   —— 玩家汇总表（胜率 / KDA / GPM / XPM / 伤害经济比等）
-    2. 比赛明细   —— 单场经济、战斗、装备与事件
-    3. Roll 阵容  —— 勾选 10 人，一次 roll 出 3 套阵容，每套附规则审计
-    4. 上传录像   —— 网页上传 .dem，云端解析并自动发布
-    5. 规则说明   —— 评分口径、roll 规则、放宽顺序、可信依据
+    2. 玩家资料   —— 个人概览、英雄、比赛、队友与对手
+    3. 比赛明细   —— 单场经济、战斗、装备与事件
+    4. Roll 阵容  —— 勾选 10 人，一次 roll 出 3 套阵容，每套附规则审计
+    5. 上传录像   —— 网页上传 .dem，云端解析并自动发布
+    6. 规则说明   —— 评分口径、roll 规则、放宽顺序、可信依据
 
 数据来自 balance.build_ratings() + stats.aggregate()。
 每次解析新比赛后重新运行本脚本即可刷新页面。
 """
 
+import argparse
 import json
 import os
+import re
+import shutil
+from web_safety import script_json
 from datetime import datetime, timedelta, timezone
 
 import balance
 import make_match_data
 import stats
+import steam_profiles
 
 REPLAY_ROOT = os.path.dirname(os.path.abspath(__file__))
 DOCS_DIR = os.path.join(REPLAY_ROOT, "docs")
 
 
-def collect_players():
-    ratings = balance.build_ratings(balance.load_matches())
-    matches = stats.load_matches(stats.DEFAULT_MATCHES_DIR)
+def collect_players(matches=None):
+    matches = matches if matches is not None else stats.load_matches(stats.DEFAULT_MATCHES_DIR)
+    ratings = balance.build_ratings(matches)
     rows = stats.aggregate(matches)
-    by_name = {r["玩家"]: r for r in rows}
+    by_id = {r["_id"]: r for r in rows}
+    profiles = steam_profiles.read_cache()
 
     out = []
     for name, p in ratings.items():
-        s = by_name.get(name, {})
+        s = by_id.get(p["id"], {})
         out.append({
-            "name": name,
+            "id": p["id"],
+            "identity_status": p["identity_status"],
+            "avatar": steam_profiles.avatar_for(p["id"], profiles),
+            "samples": p["samples"],
+            "name": p["name"],
             "rating": p["rating"],
             "elo": p["elo"],
             "perf": p["perf"],
@@ -44,7 +55,7 @@ def collect_players():
             "games": s.get("场次", p["games"]),
             "wins": s.get("胜", 0),
             "losses": s.get("负", 0),
-            "winRate": float(str(s.get("胜率", f'{p["win_rate"]*100:.1f}%')).rstrip("%")),
+            "winRate": 100 * p["win_rate"] if p["samples"]["results"] else None,
             "coreRate": s.get("核心率", "-"),
             "rankAll": s.get("全场经济平均排名", 0),
             "rankTeam": s.get("队内经济平均排名", 0),
@@ -61,7 +72,7 @@ def collect_players():
             "mmrNum": s.get("_mmr"),
             "heroes": s.get("常用英雄", ""),
         })
-    out.sort(key=lambda x: (-x["winRate"], -x["rating"]))
+    out.sort(key=lambda x: (-(x["winRate"] or 0), -x["rating"]))
     return out, len(matches)
 
 
@@ -71,6 +82,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dota 2 对黑数据统计</title>
+<link rel="stylesheet" href="player_profiles.css?v=__PROFILE_VER__">
 <style>
   :root {
     color-scheme: dark;
@@ -102,8 +114,14 @@ TEMPLATE = r"""<!DOCTYPE html>
   .player.on { border-color:var(--accent); background:#1a2420; }
   .player input { accent-color:#7ee0a1; width:16px; height:16px; }
   .p-main { flex:1; min-width:0; }
+  .player-avatar { position:relative; display:inline-flex; width:24px; height:24px; flex:0 0 24px; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; background:#2b3545; color:#cbd9ee; font-size:12px; font-weight:600; vertical-align:middle; margin-right:6px; }
+  .player-avatar img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .player-identity { display:inline-flex; align-items:center; }
   .p-name { font-weight:650; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .p-meta { color:var(--muted); font-size:11px; margin-top:3px; }
+  .rp-roll-link { font-size:10px; color:var(--muted); white-space:nowrap; }
+  .tabs { overflow-x:auto; }
+  .tab { white-space:nowrap; }
   .p-rating { font-size:18px; font-weight:700; }
   .badge { display:inline-block; font-size:10px; padding:1px 6px; border-radius:999px; margin-left:5px; }
   .badge.core { color:#7ee0a1; background:#173125; }
@@ -185,6 +203,17 @@ TEMPLATE = r"""<!DOCTYPE html>
   .subtab.active { color:var(--accent); border-bottom-color:var(--accent); }
   .subpane { display:none; } .subpane.active { display:block; }
   .scoreboard { margin-top:10px; }
+  .scoreboard .m-table { min-width:980px; }
+  .scoreboard .item-chips { min-width:160px; max-width:220px; }
+  .title-cell { white-space:normal !important; min-width:120px; }
+  .title-badge { display:inline-block; padding:3px 7px; margin:2px; border:1px solid #42655a; border-radius:5px; background:#203b30; color:#9ae3b7; font-size:11px; cursor:pointer; }
+  .title-badge:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .title-mvp { background:#43351b; border-color:#8a6930; color:#ffe09c; font-weight:700; }
+  .title-soul { background:#302541; border-color:#655083; color:#d6b8ff; }
+  .award-explanation { margin:10px 0; padding:10px 12px; border:1px solid var(--line); border-radius:8px; color:var(--accent); font-size:13px; overflow-wrap:anywhere; }
+  .title-rules { margin-top:18px; }
+  .title-rules summary { cursor:pointer; font-size:13px; color:var(--text); }
+
   .sb-head { display:flex; justify-content:space-between; font-size:13px; font-weight:700; margin:10px 0 6px; }
   .sb-radiant { color:var(--accent); } .sb-dire { color:var(--bad); }
   .m-table { width:100%; border-collapse:collapse; font-size:12px; }
@@ -194,7 +223,10 @@ TEMPLATE = r"""<!DOCTYPE html>
   .m-table th:nth-child(2), .m-table td:nth-child(2) { text-align:left; }
   .hero-cell { font-weight:600; } .hero-cell span { color:var(--muted); font-weight:400; font-size:11px; }
   .item-chips { display:flex; gap:3px; flex-wrap:wrap; justify-content:flex-end; }
-  .item-chip { background:#222733; border-radius:5px; padding:2px 5px; font-size:10.5px; color:#b9bfcc; }
+  .item-chip { display:inline-flex; align-items:center; gap:4px; background:#222733; border-radius:5px; padding:2px 5px; font-size:10.5px; color:#b9bfcc; }
+  .item-icon { width:23px; height:17px; object-fit:cover; border-radius:3px; vertical-align:middle; }
+  .purchase-chip .item-icon { margin-right:4px; }
+  .match-hero-image { width:42px; height:24px; object-fit:cover; border-radius:4px; margin-right:6px; vertical-align:middle; }
   .chart-card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
   .chart-title { font-size:13px; font-weight:600; margin-bottom:6px; }
   .chart-host { position:relative; width:100%; min-height:200px; }
@@ -337,6 +369,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 
 <nav class="tabs">
   <button class="tab active" data-tab="stats">数据统计</button>
+  <button class="tab" data-tab="profile">玩家资料</button>
   <button class="tab" data-tab="match">比赛明细</button>
   <button class="tab" data-tab="roll">Roll 阵容</button>
   <button class="tab" data-tab="upload">上传录像</button>
@@ -352,6 +385,8 @@ TEMPLATE = r"""<!DOCTYPE html>
     </table>
   </div>
 </section>
+
+<section id="pane-profile" class="pane"><div id="profileRoot"></div></section>
 
 <section id="pane-match" class="pane">
   <div class="m-layout">
@@ -498,6 +533,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 </section>
 
 <script src="data/matches.js?v=__DATA_VER__"></script>
+<script src="player_profiles.js?v=__PROFILE_VER__"></script>
 <script>
 const PLAYERS = __DATA__;
 const MATCH_COUNT = __MATCHES__;
@@ -506,7 +542,7 @@ const AI_ENDPOINT = __AI_ENDPOINT__;
 const UPLOAD_ENDPOINT = __UPLOAD_ENDPOINT__;
 const UPLOAD_HINT = __UPLOAD_HINT__;
 const state = {
-  selected: new Set(PLAYERS.map(p => p.name)),
+  selected: new Set(PLAYERS.map(p => p.id)),
   results: [],
   resultsHtml: "",
   rollPool: [],
@@ -517,39 +553,65 @@ const $ = (id) => document.getElementById(id);
 
 /* ---------- Tabs ---------- */
 document.querySelectorAll(".tab").forEach(btn => {
-  btn.onclick = () => showTab(btn.dataset.tab);
+  btn.onclick = () => navigateTab(btn.dataset.tab);
 });
 function showTab(name) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".pane").forEach(p => p.classList.toggle("active", p.id === "pane-" + name));
-  if (name === "match") initMatchTab();
+  if (name === "match" && !matchState.initialized) initMatchTab();
   if (name === "upload") warmUpUpload();
+}
+
+function navigateTab(name) {
+  if (name === "profile") {
+    location.hash = "player=" + encodeURIComponent(profileUI.id || (PLAYERS[0] && PLAYERS[0].id) || "") + "&view=overview";
+  } else if (name === "match" && MATCHES.length) {
+    location.hash = "match=" + encodeURIComponent(matchState.id || MATCHES[0].id) + "&sub=" + matchState.sub;
+  } else {
+    location.hash = "tab=" + name;
+  }
+}
+function playerLink(p) {
+  return `<a class="player-link player-identity" href="#player=${encodeURIComponent(p.id)}&view=overview">${playerAvatar(p)}<span>${esc(p.name)}</span></a>`;
 }
 
 /* ---------- 数据统计 ---------- */
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+function playerAvatar(p) {
+  const url = String(p.avatar || "");
+  const safe = /^https:\/\/(?:[a-z0-9-]+\.)*steamstatic\.com\//i.test(url) || /^https:\/\/steamcdn-a\.akamaihd\.net\//i.test(url);
+  const initial = Array.from(String(p.name || "?").trim())[0] || "?";
+  return `<span class="player-avatar" aria-hidden="true"><span>${esc(initial)}</span>${safe ? `<img data-steam-avatar src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}</span>`;
+}
+function gameImage(url, kind = "item") {
+  if (!/^https:\/\/(?:[a-z0-9-]+\.)*steamstatic\.com\//i.test(url || "")) return "";
+  return `<img ${kind === "hero" ? "data-hero-image" : "data-item-image"} class="${kind === "hero" ? "match-hero-image" : "item-icon"}" src="${esc(url)}" alt="" loading="lazy">`;
+}
+document.addEventListener("error", event => {
+  if (event.target.matches && event.target.matches("img[data-steam-avatar], img[data-hero-image], img[data-item-image]")) event.target.remove();
+}, true);
 const STAT_COLUMNS = [
-  { key: "name", label: "玩家", type: "str", cls: "name", fmt: p => esc(p.name) },
+  { key: "name", label: "玩家", type: "str", cls: "name", fmt: p => playerLink(p) + (p.identity_status === "unresolved" ? ' <span class="badge prov">身份待确认</span>' : "") },
   { key: "rating", label: "综合", type: "num", fmt: p => p.rating.toFixed(1) },
   { key: "games", label: "场次", type: "num", fmt: p => p.games },
   { key: "wins", label: "胜-负", type: "num", fmt: p => `${p.wins}-${p.losses}`, get: p => p.wins },
-  { key: "winRate", label: "胜率", type: "num", fmt: p => p.winRate.toFixed(1) + "%" },
+  { key: "winRate", label: "胜率", type: "num", fmt: p => (p.winRate == null ? "暂无数据" : nfmt(p.winRate, 1) + "%") },
   { key: "role", label: "定位", type: "str", fmt: p => p.role,
     clsFn: p => p.role === "核心" ? "role-core" : "role-sup" },
   { key: "coreRate", label: "核心率", type: "num", get: p => parseFloat(p.coreRate), fmt: p => p.coreRate },
-  { key: "rankAll", label: "全场排名", type: "num", fmt: p => Number(p.rankAll).toFixed(2) },
-  { key: "rankTeam", label: "队内排名", type: "num", fmt: p => Number(p.rankTeam).toFixed(2) },
-  { key: "kda", label: "KDA", type: "num", fmt: p => Number(p.kda).toFixed(2) },
-  { key: "kd", label: "平均K/D/A", type: "num", get: p => Number(p.kda), fmt: p => esc(p.kd) },
-  { key: "gpm", label: "GPM", type: "num", fmt: p => Number(p.gpm).toFixed(1) },
-  { key: "xpm", label: "XPM", type: "num", fmt: p => Number(p.xpm).toFixed(1) },
-  { key: "nwK", label: "净资产(K)", type: "num", fmt: p => Number(p.nwK).toFixed(1) },
-  { key: "dmgK", label: "造成英雄伤害(K)", type: "num", fmt: p => Number(p.dmgK).toFixed(1) },
-  { key: "dmgTakenK", label: "承受英雄伤害(K)", type: "num", fmt: p => Number(p.dmgTakenK).toFixed(1) },
-  { key: "dmgGold", label: "伤害/经济", type: "num", fmt: p => Number(p.dmgGold).toFixed(2) },
-  { key: "takenGold", label: "承伤/经济", type: "num", fmt: p => Number(p.takenGold).toFixed(2) },
+  { key: "rankAll", label: "全场排名", type: "num", fmt: p => nfmt(p.rankAll, 2) },
+  { key: "rankTeam", label: "队内排名", type: "num", fmt: p => nfmt(p.rankTeam, 2) },
+  { key: "kda", label: "KDA", type: "num", fmt: p => nfmt(p.kda, 2) },
+  { key: "kd", label: "平均K/D/A", type: "num", get: p => p.kda, fmt: p => esc(p.kd) },
+  { key: "gpm", label: "GPM", type: "num", fmt: p => nfmt(p.gpm, 1) },
+  { key: "xpm", label: "XPM", type: "num", fmt: p => nfmt(p.xpm, 1) },
+  { key: "nwK", label: "净资产(K)", type: "num", fmt: p => nfmt(p.nwK, 1) },
+  { key: "dmgK", label: "造成英雄伤害(K)", type: "num", fmt: p => nfmt(p.dmgK, 1) },
+  { key: "dmgTakenK", label: "承受英雄伤害(K)", type: "num", fmt: p => nfmt(p.dmgTakenK, 1) },
+  { key: "dmgGold", label: "伤害/经济", type: "num", fmt: p => nfmt(p.dmgGold, 2) },
+  { key: "takenGold", label: "承伤/经济", type: "num", fmt: p => nfmt(p.takenGold, 2) },
   { key: "mmr", label: "MMR", type: "num", get: p => p.mmrNum, fmt: p => p.mmr },
   { key: "heroes", label: "常用英雄", type: "str", cls: "heroes",
     fmt: p => `<span title="${esc(p.heroes)}">${esc(p.heroes)}</span>` },
@@ -588,7 +650,10 @@ function renderStats() {
 
   $("statsBody").innerHTML = rows.map(p => "<tr>" + STAT_COLUMNS.map(c => {
     const cls = c.clsFn ? c.clsFn(p) : (c.cls || "");
-    return `<td class="${cls}">${c.fmt(p)}</td>`;
+    const sampleFields = {gpm:"gold_per_min", xpm:"xp_per_min", kda:"kda", dmgGold:"dmg_gold"};
+    const sample = p.samples && p.samples[sampleFields[c.key]];
+    const note = sample === undefined ? "" : `有效样本 ${sample}/${p.games} 场`;
+    return `<td class="${cls}" title="${esc(note)}">${c.fmt(p)}</td>`;
   }).join("") + "</tr>").join("");
 }
 
@@ -608,7 +673,9 @@ function fmtClock(sec) {
   return (neg ? "-" : "") + m + ":" + String(s).padStart(2, "0");
 }
 function fmtDuration(sec) { return fmtClock(sec); }
+function nfmt(n, digits = 0) { return n === null || n === undefined ? "暂无数据" : Number(n).toFixed(digits); }
 function kfmt(n) {
+  if (n === null || n === undefined) return "暂无数据";
   n = Number(n) || 0;
   if (Math.abs(n) >= 10000) return (n / 1000).toFixed(1) + "K";
   return String(Math.round(n));
@@ -631,10 +698,10 @@ function initMatchTab() {
 
 function renderMatchList() {
   $("matchList").innerHTML = MATCHES.map(m => {
-    const win = m.winner === "radiant" ? "天辉胜" : "夜魇胜";
-    return `<button class="m-item ${m.id === matchState.id ? "active" : ""}" data-id="${m.id}">
+    const win = m.winner === "radiant" ? "天辉胜" : m.winner === "dire" ? "夜魇胜" : "胜负未知";
+    return `<button class="m-item ${m.id === matchState.id ? "active" : ""}" data-id="${esc(m.id)}">
       <div class="mi-top"><span class="${m.radiant_win ? "mi-win" : "mi-loss"}">${win}</span>
-        <span>${m.score.radiant} - ${m.score.dire}</span></div>
+        <span>${nfmt(m.score.radiant)} - ${nfmt(m.score.dire)}</span></div>
       <div class="mi-sub">${esc(m.date)} · ${fmtDuration(m.duration)} · ${esc(m.mode)}</div>
     </button>`;
   }).join("");
@@ -657,13 +724,13 @@ function selectMatch(id, updateHash) {
 
 function renderMatchDetail(m) {
   if (!m) return;
-  const win = m.winner === "radiant" ? "天辉胜利" : "夜魇胜利";
+  const win = m.winner === "radiant" ? "天辉胜利" : m.winner === "dire" ? "夜魇胜利" : "胜负未知";
   const kpi = (side) => {
     const t = m.teams[side];
     return `<div class="kpis">
-      <div class="kpi"><div class="k">击杀</div><div class="v">${t.kills}</div></div>
-      <div class="kpi"><div class="k">死亡</div><div class="v">${t.deaths}</div></div>
-      <div class="kpi"><div class="k">助攻</div><div class="v">${t.assists}</div></div>
+      <div class="kpi"><div class="k">击杀</div><div class="v">${nfmt(t.kills)}</div></div>
+      <div class="kpi"><div class="k">死亡</div><div class="v">${nfmt(t.deaths)}</div></div>
+      <div class="kpi"><div class="k">助攻</div><div class="v">${nfmt(t.assists)}</div></div>
       <div class="kpi"><div class="k">净资产</div><div class="v">${kfmt(t.net_worth)}</div></div>
       <div class="kpi"><div class="k">英雄伤害</div><div class="v">${kfmt(t.hero_damage)}</div></div>
       <div class="kpi"><div class="k">推塔伤害</div><div class="v">${kfmt(t.tower_damage)}</div></div>
@@ -672,9 +739,9 @@ function renderMatchDetail(m) {
   $("matchDetail").innerHTML = `
     <div class="m-head">
       <div class="m-title">
-        <span class="m-score">${m.score.radiant} <span style="color:var(--muted);font-size:16px">-</span> ${m.score.dire}</span>
+        <span class="m-score">${nfmt(m.score.radiant)} <span style="color:var(--muted);font-size:16px">-</span> ${nfmt(m.score.dire)}</span>
         <b class="${m.radiant_win ? "mi-win" : "mi-loss"}">${win}</b>
-        <span class="m-meta">${esc(m.date)} · ${fmtDuration(m.duration)} · ${esc(m.mode)} · #${m.id}</span>
+        <span class="m-meta">${esc(m.date)} · ${fmtDuration(m.duration)} · ${esc(m.mode)} · #${esc(m.id)}</span>
       </div>
       <div style="margin-top:12px"><div class="sb-head sb-radiant">天辉</div>${kpi("radiant")}
         <div class="sb-head sb-dire">夜魇</div>${kpi("dire")}</div>
@@ -708,18 +775,36 @@ function renderSub(m) {
 function scoreboardTable(team, m) {
   const players = m.players.filter(p => p.team === team).sort((a, b) => b.net_worth - a.net_worth);
   return `<div class="sb-head ${team === "radiant" ? "sb-radiant" : "sb-dire"}">${teamZh(team)}</div>
-  <div class="table-wrap"><table class="m-table">
-    <thead><tr><th>英雄</th><th>玩家</th><th>等级</th><th>K/D/A</th><th>净资产</th><th>GPM/XPM</th><th>正/反</th><th>装备</th></tr></thead>
+  <div class="table-wrap scoreboard"><table class="m-table">
+    <thead><tr><th>英雄</th><th>玩家</th><th>称号</th><th>等级</th><th>K/D/A</th><th>净资产</th><th>GPM/XPM</th><th>正/反</th><th>装备</th></tr></thead>
     <tbody>${players.map(p => `<tr>
-      <td class="hero-cell">${esc(p.hero_zh)}<span><br>${esc(p.hero)}</span></td>
-      <td>${esc(p.name)}</td><td>${p.level}</td><td>${p.kills}/${p.deaths}/${p.assists}</td>
-      <td>${kfmt(p.net_worth)}</td><td>${p.gpm}/${p.xpm}</td><td>${p.last_hits}/${p.denies}</td>
-      <td><div class="item-chips">${p.items.map(i => `<span class="item-chip" title="${esc(i.key)}">${esc(i.zh)}</span>`).join("")}</div></td>
+      <td class="hero-cell">${gameImage(p.hero_image, "hero")}${esc(p.hero_zh)}<span><br>${esc(p.hero)}</span></td>
+      <td>${playerLink(p)}${p.identity_status === "unresolved" ? '<small class="why"> · 身份待确认</small>' : ""}</td><td class="title-cell">${titleBadges(p)}</td><td>${nfmt(p.level)}</td><td>${nfmt(p.kills)}/${nfmt(p.deaths)}/${nfmt(p.assists)}</td>
+      <td>${kfmt(p.net_worth)}</td><td>${nfmt(p.gpm)}/${nfmt(p.xpm)}</td><td>${nfmt(p.last_hits)}/${nfmt(p.denies)}</td>
+      <td><div class="item-chips">${p.items.map(i => `<span class="item-chip" title="${esc(i.key)}">${gameImage(i.image)}${esc(i.zh)}</span>`).join("")}</div></td>
     </tr>`).join("")}</tbody></table></div>`;
 }
 
+function titleBadges(p) {
+  return (p.titles || []).map(t => `<button type="button" class="title-badge ${t.key === "mvp" ? "title-mvp" : t.key === "soul" ? "title-soul" : ""}"
+    title="${esc(t.name + "：" + t.reason)}" aria-label="${esc(t.name + "：" + t.reason)}" data-title-reason="${esc(p.name + " · " + t.name + "：" + t.reason)}">${esc(t.short)}</button>`).join("") || '<span class="why">—</span>';
+}
 function renderOverview(host, m) {
-  host.innerHTML = scoreboardTable("radiant", m) + scoreboardTable("dire", m);
+  const awards = m.awards || {rules: [], unavailable: []};
+  host.innerHTML = `<div class="why">点击称号查看获奖依据 · 单场称号使用项目自拟规则 v1</div>
+    <div id="awardExplanation" class="award-explanation" role="status" aria-live="polite" hidden></div>` +
+    scoreboardTable("radiant", m) + scoreboardTable("dire", m) +
+    `<details class="rules-box title-rules"><summary>称号规则与数据说明</summary>
+      <ol>${awards.rules.map(rule => `<li>${esc(rule)}</li>`).join("")}</ol>
+      ${awards.unavailable.length ? `<p>本场未颁发：${awards.unavailable.map(x => esc(x.name + "（" + x.reason + "）")).join("；")}</p>` : ""}
+      <p>暂无数据表示未获得可靠统计，0 表示记录为零。旧解析结果需重解析才能核实字段来源。</p></details>`;
+  host.querySelectorAll("[data-title-reason]").forEach(button => {
+    button.onclick = () => {
+      const explanation = $("awardExplanation");
+      explanation.textContent = button.dataset.titleReason;
+      explanation.hidden = false;
+    };
+  });
 }
 
 function svgEl(tag, attrs) {
@@ -739,7 +824,8 @@ function drawLineChart(host, times, series, opts) {
   const pad = { l: 52, r: 18, t: 12, b: 24 };
   const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
   let vals = [];
-  series.forEach(s => s.values.forEach(v => vals.push(Number(v) || 0)));
+  series.forEach(s => s.values.forEach(v => { if (v != null && Number.isFinite(Number(v))) vals.push(Number(v)); }));
+  if (!vals.length) { host.innerHTML = '<div class="empty">暂无数据</div>'; return; }
   let min = Math.min(...vals), max = Math.max(...vals);
   if (opts.zero) { min = Math.min(min, 0); max = Math.max(max, 0); }
   if (min === max) { min -= 1; max += 1; }
@@ -765,9 +851,14 @@ function drawLineChart(host, times, series, opts) {
   });
   const colors = opts.colors || ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"];
   series.forEach((s, si) => {
-    const pts = s.values.map((v, i) => `${x(i)},${y(Number(v) || 0)}`).join(" ");
-    svg.appendChild(svgEl("polyline", { points: pts, fill: "none",
-      stroke: s.color || colors[si % colors.length], "stroke-width": 2, "stroke-linejoin": "round" }));
+    let segment = [];
+    const flush = () => {
+      if (segment.length) svg.appendChild(svgEl("polyline", { points: segment.join(" "), fill: "none",
+        stroke: s.color || colors[si % colors.length], "stroke-width": 2, "stroke-linejoin": "round" }));
+      segment = [];
+    };
+    s.values.forEach((v, i) => { if (v == null) flush(); else segment.push(`${x(i)},${y(Number(v))}`); });
+    flush();
   });
   host.appendChild(svg);
   if (series.length > 1 || opts.legend) {
@@ -802,7 +893,7 @@ function renderEconomy(host, m) {
     host.innerHTML = '<div class="empty">该场比赛没有经济曲线数据（可能未重新解析）。</div>';
     return;
   }
-  const diff = (a, b) => a.map((v, i) => (Number(v) || 0) - (Number(b[i]) || 0));
+  const diff = (a, b) => a.map((v, i) => v == null || b[i] == null ? null : Number(v) - Number(b[i]));
   const goldDiff = diff(ec.team.radiant.gold, ec.team.dire.gold);
   const xpDiff = diff(ec.team.radiant.xp, ec.team.dire.xp);
   host.innerHTML = `
@@ -823,7 +914,8 @@ function renderEconomy(host, m) {
 }
 
 function damageBar(p, key) {
-  const d = (p.damage && p.damage[key]) || {};
+  if (!p.damage || !p.damage[key]) return '<div class="why">暂无伤害构成</div>';
+  const d = p.damage[key];
   const vals = [["physical", "物理", "#3987e5"], ["magical", "魔法", "#d95926"], ["pure", "纯粹", "#199e70"], ["other", "其他", "#898781"]];
   const total = vals.reduce((s, v) => s + (Number(d[v[0]]) || 0), 0) || 1;
   return `<div class="dmg-bar">${vals.map(v => {
@@ -838,11 +930,11 @@ function renderCombat(host, m) {
     return `<div class="sb-head ${team === "radiant" ? "sb-radiant" : "sb-dire"}">${teamZh(team)}</div>
     <div class="table-wrap"><table class="m-table">
       <thead><tr><th>英雄</th><th>造成伤害</th><th>承受伤害</th><th>推塔伤害</th><th>眩晕</th><th>治疗</th><th>插眼/反眼</th></tr></thead>
-      <tbody>${ps.map(p => `<tr><td class="hero-cell">${esc(p.hero_zh)}<span><br>${esc(p.name)}</span></td>
+      <tbody>${ps.map(p => `<tr><td class="hero-cell">${gameImage(p.hero_image, "hero")}${esc(p.hero_zh)}<span><br>${playerLink(p)}</span></td>
         <td>${kfmt(p.hero_damage)}${damageBar(p, "dealt")}</td>
         <td>${kfmt(p.hero_damage_taken)}${damageBar(p, "taken")}</td>
-        <td>${kfmt(p.tower_damage)}</td><td>${Number(p.stuns).toFixed(1)}s</td>
-        <td>${kfmt(p.healing)}</td><td>${p.wards_placed}/${p.wards_destroyed}</td></tr>`).join("")}</tbody>
+        <td>${kfmt(p.tower_damage)}</td><td>${p.stuns == null ? "暂无数据" : nfmt(p.stuns, 1) + "s"}</td>
+        <td>${kfmt(p.healing)}</td><td>${nfmt(p.wards_placed)}/${nfmt(p.wards_destroyed)}</td></tr>`).join("")}</tbody>
     </table></div>`;
   };
   host.innerHTML = table("radiant") + table("dire");
@@ -855,9 +947,9 @@ function renderItems(host, m) {
     if (matchState.onlyFinished) rows = rows.filter(x => !x.recipe && x.cost >= 2000);
     rows.sort((a, b) => a.t - b.t);
     return `<div class="purchase-card">
-      <div class="purchase-head"><span>${esc(p.hero_zh)} · ${esc(p.name)}</span>
-        <span class="item-chips">${p.items.map(i => `<span class="item-chip">${esc(i.zh)}</span>`).join("")}</span></div>
-      <div class="purchase-list">${rows.map(x => `<span class="purchase-chip" title="${esc(x.item)}">[${fmtClock(x.t)}] ${esc(x.item_zh)} ${x.cost || ""}</span>`).join("") || '<span class="why">没有购买记录</span>'}</div>
+      <div class="purchase-head"><span>${gameImage(p.hero_image, "hero")}${esc(p.hero_zh)} · ${playerLink(p)}</span>
+        <span class="item-chips">${p.items.map(i => `<span class="item-chip">${gameImage(i.image)}${esc(i.zh)}</span>`).join("")}</span></div>
+      <div class="purchase-list">${rows.map(x => `<span class="purchase-chip" title="${esc(x.item)}">${gameImage(x.item_image)}[${fmtClock(x.t)}] ${esc(x.item_zh)} ${x.cost || ""}</span>`).join("") || '<span class="why">没有购买记录</span>'}</div>
     </div>`;
   }).join("");
   host.innerHTML = `<div class="filter-row">
@@ -901,20 +993,23 @@ function renderEvents(host, m) {
 /* ---------- 选人 ---------- */
 function renderPlayers() {
   $("players").innerHTML = PLAYERS.map(p => `
-    <label class="player ${state.selected.has(p.name) ? "on" : ""}">
-      <input type="checkbox" ${state.selected.has(p.name) ? "checked" : ""} onchange="toggle('${escJs(p.name)}')">
+    <label class="player ${state.selected.has(p.id) ? "on" : ""}">
+      <input type="checkbox" ${state.selected.has(p.id) ? "checked" : ""} data-player-id="${esc(p.id)}">
       <div class="p-main">
-        <div class="p-name">${esc(p.name)}
+        <div class="p-name">${playerAvatar(p)}${esc(p.name)}
           <span class="badge ${p.role === "核心" ? "core" : "sup"}">${p.role}</span>
           ${p.provisional ? '<span class="badge prov">暂定</span>' : ""}
         </div>
-        <div class="p-meta">${p.games} 场 · 胜率 ${p.winRate.toFixed(1)}% · KDA ${Number(p.kda).toFixed(2)} · GPM ${Number(p.gpm).toFixed(0)}</div>
+        <div class="p-meta">${p.games} 场 · 胜率 ${p.winRate == null ? "暂无数据" : nfmt(p.winRate, 1) + "%"} · KDA ${nfmt(p.kda, 2)} · GPM ${nfmt(p.gpm)}</div>
       </div>
       <div class="p-rating">${Math.round(p.rating)}</div>
+      <a class="rp-roll-link player-link" href="#player=${encodeURIComponent(p.id)}&view=overview" aria-label="${esc('查看 ' + p.name + ' 的玩家资料')}">资料 ↗</a>
     </label>`).join("");
+  document.querySelectorAll("#players input[data-player-id]").forEach(input => {
+    input.onchange = () => toggle(input.dataset.playerId);
+  });
   updateBar();
 }
-function escJs(s) { return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
 function toggle(name) {
   if (state.selected.has(name)) state.selected.delete(name);
   else if (state.selected.size < 10) state.selected.add(name);
@@ -932,7 +1027,7 @@ function updateBar() {
   const n = state.selected.size;
   $("cnt").textContent = n;
   $("roll").disabled = n !== 10;
-  const cores = [...state.selected].map(x => PLAYERS.find(p => p.name === x))
+  const cores = [...state.selected].map(x => PLAYERS.find(p => p.id === x))
     .filter(p => p && p.role === "核心").length;
   if (n > 10) $("hint").textContent = `（已选 ${n} 人，请反选掉 ${n - 10} 人）`;
   else if (n < 10) $("hint").textContent = `（还差 ${10 - n} 人）`;
@@ -940,7 +1035,7 @@ function updateBar() {
 }
 $("clear").onclick = () => { state.selected.clear(); renderPlayers(); };
 $("top10").onclick = () => {
-  state.selected = new Set(PLAYERS.slice(0, 10).map(p => p.name));
+  state.selected = new Set(PLAYERS.slice(0, 10).map(p => p.id));
   renderPlayers();
 };
 
@@ -977,10 +1072,10 @@ function shuffle(a) {
   return a;
 }
 function roll() {
-  const sel = PLAYERS.filter(p => state.selected.has(p.name));
+  const sel = PLAYERS.filter(p => state.selected.has(p.id));
   if (sel.length !== 10) return;
   const cores = sel.filter(p => p.role === "核心").length;
-  const top2 = new Set([...sel].sort((x, y) => y.rating - x.rating).slice(0, 2).map(p => p.name));
+  const top2 = new Set([...sel].sort((x, y) => y.rating - x.rating).slice(0, 2).map(p => p.id));
   const all = buildSplits(sel);
 
   const levels = [
@@ -996,8 +1091,8 @@ function roll() {
       if (Math.abs(r.ca - r.cb) > 1) return false;
       if (r.diff > lv.diff) return false;
       if (r.pa < lv.lo || r.pa > lv.hi) return false;
-      const a2 = r.a.filter(p => top2.has(p.name)).length;
-      const b2 = r.b.filter(p => top2.has(p.name)).length;
+      const a2 = r.a.filter(p => top2.has(p.id)).length;
+      const b2 = r.b.filter(p => top2.has(p.id)).length;
       if (lv.stack && (a2 === 2 || b2 === 2)) return false;
       return true;
     });
@@ -1015,7 +1110,7 @@ function roll() {
   const picks = shuffle([...pool]).slice(0, 3);
 
   state.results = picks;
-  state.rollPool = sel.map(p => p.name);
+  state.rollPool = sel.map(p => p.id);
   state.rollTop2 = [...top2];
   state.rollLevel = chosenLevel;
   state.adopted = null;
@@ -1037,8 +1132,8 @@ function memberHtml(p) {
   return `<span class="member"><b>${esc(p.name)}</b><span>${Math.round(p.rating)}</span></span>`;
 }
 function auditRows(r, top2, lv) {
-  const a2 = r.a.filter(p => top2.has(p.name)).length;
-  const b2 = r.b.filter(p => top2.has(p.name)).length;
+  const a2 = r.a.filter(p => top2.has(p.id)).length;
+  const b2 = r.b.filter(p => top2.has(p.id)).length;
   return [
     ["R2 每队结构", "核心数差 ≤ 1", `A ${r.ca}核${5 - r.ca}辅 / B ${r.cb}核${5 - r.cb}辅`, Math.abs(r.ca - r.cb) <= 1],
     ["R3 均分差", `≤ ${lv.diff}`, `${r.diff.toFixed(1)}`, r.diff <= lv.diff],
@@ -1069,7 +1164,7 @@ function card(r, idx, top2, lv) {
       <div class="team-label" style="margin-bottom:6px">规则审计</div>
       ${auditRows(r, top2, lv)}
     </div>
-    <div class="why">依据：该方案从合格池随机抽取；3 核 2 辅、均分差、预测胜率、前 2 名分布全部满足规则，池内胜率差 &lt; 0.3 个百分点。</div>
+    <div class="why">依据：该方案从合格池随机抽取；各项规则及放宽情况见本卡片审计结果。</div>
   </div>`;
 }
 
@@ -1079,10 +1174,11 @@ function normName(s) {
 }
 function playerByName(raw) {
   const key = normName(raw);
-  return PLAYERS.find(p => normName(p.name) === key) || null;
+  const candidates = PLAYERS.filter(p => normName(p.name) === key);
+  return candidates.length === 1 ? candidates[0] : null;
 }
 function aiContext() {
-  const pool = state.rollPool.map(n => PLAYERS.find(p => p.name === n)).filter(Boolean);
+  const pool = state.rollPool.map(n => PLAYERS.find(p => p.id === n)).filter(Boolean);
   return {
     players: pool.map(p => ({
       name: p.name, rating: p.rating, role: p.role,
@@ -1352,11 +1448,11 @@ function handleDisplayMatch(tool) {
     b.push(p);
   }
   const all = [...a, ...b];
-  if (new Set(all.map(p => p.name)).size !== 10) {
+  if (new Set(all.map(p => p.id)).size !== 10) {
     return { ok: false, error: "10 个玩家必须互不重复" };
   }
   const pool = new Set(state.rollPool);
-  if (all.some(p => !pool.has(p.name))) {
+  if (all.some(p => !pool.has(p.id))) {
     return { ok: false, error: "只能使用当前已选的 10 人" };
   }
   const ra = a.reduce((s, p) => s + p.rating, 0) / 5;
@@ -1795,17 +1891,24 @@ initUploadTab();
 renderStats();
 renderPlayers();
 
-window.addEventListener("hashchange", () => {
-  if (!location.hash.startsWith("#match=")) return;
+const profileUI = window.ReplayProfiles.mount({root: $("profileRoot"), players: PLAYERS, matches: MATCHES, avatarHtml: playerAvatar});
+function routeLocation() {
   const q = new URLSearchParams(location.hash.slice(1));
-  const id = q.get("match");
-  if (!id) return;
-  showTab("match");
-  const sub = q.get("sub");
-  if (sub && MATCH_SUBS.some(x => x[0] === sub)) matchState.sub = sub;
-  if (id !== matchState.id) selectMatch(id, false);
-  else if (matchState.id) renderMatchDetail(matchById(matchState.id));
-});
+  if (q.has("player")) {
+    showTab("profile");
+    profileUI.show(q.get("player"), q);
+  } else if (q.has("match")) {
+    const sub = q.get("sub");
+    if (sub && MATCH_SUBS.some(x => x[0] === sub)) matchState.sub = sub;
+    showTab("match");
+    if (matchById(q.get("match"))) selectMatch(q.get("match"), false);
+  } else {
+    const tab = q.get("tab");
+    showTab(["stats","profile","match","roll","upload","rules"].includes(tab) ? tab : "stats");
+    if (tab === "profile") profileUI.show(profileUI.id || (PLAYERS[0] && PLAYERS[0].id));
+  }
+}
+window.addEventListener("hashchange", routeLocation);
 
 let mResizeTimer = null;
 window.addEventListener("resize", () => {
@@ -1814,17 +1917,14 @@ window.addEventListener("resize", () => {
   mResizeTimer = setTimeout(() => renderSub(matchById(matchState.id)), 180);
 });
 
-if (location.hash.startsWith("#match=")) {
-  showTab("match");
-  initMatchTab();
-}
+routeLocation();
 
 // 预览模式：index.html?demo=1 自动切到 Roll 并生成 3 套
 if (new URLSearchParams(location.search).get("demo")) {
   showTab("roll");
   const cores = PLAYERS.filter(p => p.role === "核心").slice(0, 6);
   const sups = PLAYERS.filter(p => p.role === "酱油").slice(0, 4);
-  state.selected = new Set([...cores, ...sups].map(p => p.name));
+  state.selected = new Set([...cores, ...sups].map(p => p.id));
   renderPlayers();
   roll();
 }
@@ -1834,9 +1934,40 @@ if (new URLSearchParams(location.search).get("demo")) {
 """
 
 
+
+def render_page(players, match_count, ai_endpoint, upload_endpoint, upload_hint, data_ver, updated_at=None):
+    values = {
+        "__DATA__": script_json(players), "__MATCHES__": str(match_count),
+        "__TIME__": updated_at or datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M"),
+        "__AI_ENDPOINT__": script_json(ai_endpoint), "__UPLOAD_ENDPOINT__": script_json(upload_endpoint),
+        "__UPLOAD_HINT__": script_json(upload_hint), "__DATA_VER__": str(data_ver),
+        "__PROFILE_VER__": str(int(max(os.path.getmtime(os.path.join(DOCS_DIR, name)) for name in ("player_profiles.js", "player_profiles.css")))),
+    }
+    # Substitute once: a nickname containing a placeholder must remain literal data.
+    pattern = "|".join(re.escape(key) for key in values)
+    return re.sub(pattern, lambda match: values[match.group(0)], TEMPLATE)
+
+
 def main():
-    make_match_data.build()
-    players, match_count = collect_players()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--matches-dir", default=stats.DEFAULT_MATCHES_DIR)
+    ap.add_argument("--output-dir", default=DOCS_DIR)
+    ap.add_argument("--local-preview", action="store_true", help="disable cloud upload and AI endpoints")
+    ap.add_argument("--no-avatar-refresh", action="store_true", help="use cached avatars without contacting Steam")
+    args = ap.parse_args()
+    matches = stats.load_matches(args.matches_dir)
+    if not matches:
+        print("没有有效比赛，已保留现有网页。请指定 --matches-dir。")
+        return 1
+    if not args.no_avatar_refresh:
+        sync = steam_profiles.refresh_profiles(matches)
+        messages = {"no_key": "未配置 Steam Key，沿用缓存或默认头像", "unchanged": "录像数据未变化，使用缓存",
+                    "updated": "已更新 %s 位选手头像" % sync["updated"], "partial": "部分头像未获取，保留原缓存",
+                    "failed": "Steam 暂不可用，保留原缓存"}
+        print("Steam头像：" + messages[sync["status"]])
+    output_dir = os.path.abspath(args.output_dir)
+    make_match_data.build(args.matches_dir, os.path.join(output_dir, "data", "matches.js"))
+    players, match_count = collect_players(matches)
     ai_endpoint = ""
     upload_endpoint = ""
     upload_hint = "口令见群公告，或向群主索要。"
@@ -1848,19 +1979,19 @@ def main():
         upload_hint = conf.get("upload_hint", upload_hint)
     except (OSError, json.JSONDecodeError):
         pass
-    data_path = os.path.join(DOCS_DIR, "data", "matches.js")
+    if args.local_preview:
+        ai_endpoint = upload_endpoint = ""
+        upload_hint = "本地预览：云端上传和 AI 接口已关闭。"
+    data_path = os.path.join(output_dir, "data", "matches.js")
     data_ver = str(int(os.path.getmtime(data_path))) if os.path.isfile(data_path) else "0"
 
-    html = (TEMPLATE
-            .replace("__DATA__", json.dumps(players, ensure_ascii=False))
-            .replace("__MATCHES__", str(match_count))
-            .replace("__TIME__", datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M"))
-            .replace("__AI_ENDPOINT__", json.dumps(ai_endpoint))
-            .replace("__UPLOAD_ENDPOINT__", json.dumps(upload_endpoint))
-            .replace("__UPLOAD_HINT__", json.dumps(upload_hint, ensure_ascii=False))
-            .replace("__DATA_VER__", data_ver))
-    os.makedirs(DOCS_DIR, exist_ok=True)
-    out = os.path.join(DOCS_DIR, "index.html")
+    html = render_page(players, match_count, ai_endpoint, upload_endpoint, upload_hint, data_ver)
+    os.makedirs(output_dir, exist_ok=True)
+    if output_dir != os.path.abspath(DOCS_DIR):
+        shutil.copytree(os.path.join(DOCS_DIR, "vendor"), os.path.join(output_dir, "vendor"), dirs_exist_ok=True)
+        for name in ("player_profiles.js", "player_profiles.css"):
+            shutil.copy2(os.path.join(DOCS_DIR, name), os.path.join(output_dir, name))
+    out = os.path.join(output_dir, "index.html")
     with open(out, "w", encoding="utf-8") as fp:
         fp.write(html)
     print(f"已生成: {out}")
