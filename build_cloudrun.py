@@ -30,6 +30,7 @@ APP_FILES = [
     "balance.py",
     "make_web.py",
     "make_match_data.py",
+    "rating.py",
     "cloudbase.json",
     "aliases.json",
     "baselines.json",
