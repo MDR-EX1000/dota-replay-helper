@@ -111,137 +111,51 @@ def load_matches():
     return matches
 
 
-def identity(player, aliases, canonicals):
-    raw = player.get("name", "")
-    sid = str(player.get("steamid", ""))
-    name = aliases.get(raw) or aliases.get(sid)
-    if not name and raw in canonicals:
-        name = raw
-    return name or raw or sid, raw, sid
-
-
 def build_ratings(matches):
-    aliases = load_aliases()
-    canonicals = set(aliases.values())
-    mmr_map = load_mmr()
-
+    import stats
+    from player_data import IdentityResolver
+    matches = sorted(matches, key=lambda m: (m.get("start_time", 0), str(m.get("match_id", ""))))
+    rows = stats.aggregate(matches)
+    # Use exactly the same explicit legacy mappings and account groups as statistics.
+    resolver = IdentityResolver(matches, load_aliases(), stats.load_legacy_identities())
     elo = defaultdict(lambda: START_ELO)
-    agg = {}
-
-    for d in matches:
-        teams = {"radiant": [], "dire": []}
-        for p in d["players"]:
-            key, raw, sid = identity(p, aliases, canonicals)
-            teams[p["team"]].append(key)
-
-            row = agg.setdefault(key, {
-                "raw": raw, "steamids": set(),
-                "games": 0, "wins": 0, "core_games": 0,
-                "gpm": [], "xpm": [], "lh": [], "dmg_ratio": [],
-                "kills": 0, "deaths": 0, "assists": 0,
-            })
-            row["steamids"].add(sid)
-            row["games"] += 1
-            won = (p["team"] == "radiant") == bool(d["radiant_win"])
-            row["wins"] += won
-            row["gpm"].append(p.get("gold_per_min", 0))
-            row["xpm"].append(p.get("xp_per_min", 0))
-            row["kills"] += p.get("kills", 0)
-            row["deaths"] += p.get("deaths", 0)
-            row["assists"] += p.get("assists", 0)
-            row["lh"].append(p.get("last_hits", 0))
-            hero_damage = p.get("hero_damage", 0)
-            net_worth = p.get("net_worth", 0)
-            row["dmg_ratio"].append(hero_damage / max(net_worth, 1))
-
-        ra = sum(elo[k] for k in teams["radiant"]) / 5
-        rb = sum(elo[k] for k in teams["dire"]) / 5
-        ea = 1 / (1 + 10 ** ((rb - ra) / 400))
-        sa = 1.0 if d["radiant_win"] else 0.0
-        for k in teams["radiant"]:
-            elo[k] += K_FACTOR * (sa - ea)
-        for k in teams["dire"]:
-            elo[k] += K_FACTOR * ((1 - sa) - (1 - ea))
-
-    # 队内净资产排名 -> 核心率
-    for d in matches:
-        for team in ("radiant", "dire"):
-            members = sorted(
-                [p for p in d["players"] if p["team"] == team],
-                key=lambda p: p.get("net_worth", 0), reverse=True,
-            )
-            for i, p in enumerate(members):
-                key, _, _ = identity(p, aliases, canonicals)
-                if i < 3:
-                    agg[key]["core_games"] += 1
-
-    # 定位与场均数据
-    for k, r in agg.items():
-        r["role"] = "核心" if r["core_games"] / max(r["games"], 1) >= 0.5 else "酱油"
-        r["core_rate"] = r["core_games"] / max(r["games"], 1)
-        r["win_rate"] = r["wins"] / max(r["games"], 1)
-        r["avg_gpm"] = sum(r["gpm"]) / r["games"]
-        r["avg_xpm"] = sum(r["xpm"]) / r["games"]
-        r["avg_kda"] = (r["kills"] + r["assists"]) / max(r["deaths"], 1)
-        r["avg_lh"] = sum(r["lh"]) / r["games"]
-        r["avg_dmg_gold"] = sum(r["dmg_ratio"]) / r["games"]
-
-    # 绝对值 + 位置基准，不做百分位；权重固定，基准可按位置配置
-    weights = {"kda": 0.40, "gpm": 0.15, "xpm": 0.15, "dmg_gold": 0.30}
+    for match in matches:
+        if not isinstance(match.get("radiant_win"), bool):
+            continue
+        teams = {team: [resolver.resolve(p, match, i)[0] for i, p in enumerate(match["players"])
+                        if p.get("team") == team] for team in ("radiant", "dire")}
+        if any(len(team) != 5 for team in teams.values()):
+            continue
+        if len(set(teams["radiant"] + teams["dire"])) != 10:
+            continue
+        ra, rb = (sum(elo[k] for k in teams[t]) / 5 for t in ("radiant", "dire"))
+        ea = expected(ra, rb)
+        for team, result, probability in (("radiant", float(match["radiant_win"]), ea),
+                                           ("dire", float(not match["radiant_win"]), 1-ea)):
+            for key in teams[team]:
+                elo[key] += K_FACTOR * (result-probability)
     baselines = load_baselines()
-    perf = {}
-    for k, r in agg.items():
-        b = baselines[r["role"]]
-        score = (
-            weights["kda"] * (r["avg_kda"] / b["kda"] - 1.0)
-            + weights["gpm"] * (r["avg_gpm"] / b["gpm"] - 1.0)
-            + weights["xpm"] * (r["avg_xpm"] / b["xpm"] - 1.0)
-            + weights["dmg_gold"] * (r["avg_dmg_gold"] / b["dmg_gold"] - 1.0)
-        )
-        raw = BASE + 500.0 * score
-        n = r["games"]
-        shrink = n / (n + 5.0)
-        perf[k] = max(BASE - 500.0, min(BASE + 500.0, BASE + (raw - BASE) * shrink))
-
     players = {}
-    for k, r in agg.items():
-        mmr_val = mmr_map.get(k)
-        if mmr_val is None:
-            for s in r["steamids"]:
-                if s in mmr_map:
-                    mmr_val = mmr_map[s]
-                    break
-        try:
-            mmr_num = int(mmr_val) if mmr_val is not None else None
-        except (TypeError, ValueError):
-            mmr_num = None
-
-        if mmr_num is None:
-            mmr_num = 2000  # 未登记默认 2000
-        # 3000 MMR = 1000 分；1000 MMR 差 = 33.3 分，与 Elo 方差同量级
-        mmr_rating = BASE + (mmr_num - 3000) / 30.0
-        rating = 0.4 * elo[k] + 0.3 * perf[k] + 0.3 * mmr_rating
-
-        provisional = r["games"] < 2
-        if provisional:
-            rating = BASE
-        players[k] = {
-            "name": k,
-            "elo": round(elo[k], 1),
-            "perf": round(perf[k], 1),
-            "mmr": mmr_num,
-            "mmr_rating": round(mmr_rating, 1),
-            "rating": round(rating, 1),
-            "provisional": provisional,
-            "role": r["role"],
-            "games": r["games"],
-            "win_rate": r["win_rate"],
-            "gpm": round(r["avg_gpm"], 1),
-            "xpm": round(r["avg_xpm"], 1),
-            "kda": round(r["avg_kda"], 2),
-            "kd": (f"{r['kills'] / r['games']:.1f}/{r['deaths'] / r['games']:.1f}"
-                   f"/{r['assists'] / r['games']:.1f}"),
-        }
+    for row in rows:
+        key = row["_identity"]
+        ready = row["_rating_ready"]
+        perf = BASE
+        if ready:
+            b = baselines[row["定位"]]
+            values = row["_rating_inputs"]
+            score = (.40*(values["kda"]/b["kda"]-1) + .15*(values["gpm"]/b["gpm"]-1)
+                     + .15*(values["xpm"]/b["xpm"]-1) + .30*(values["dmg_gold"]/b["dmg_gold"]-1))
+            perf = max(BASE-500, min(BASE+500, BASE+500*score*row["场次"]/(row["场次"]+5)))
+        mmr_num = row["_mmr"] if row["_mmr"] is not None else 2000
+        mmr_rating = BASE+(mmr_num-3000)/30
+        provisional = row["场次"] < 2 or not ready
+        rating = BASE if provisional else .4*elo[key]+.3*perf+.3*mmr_rating
+        players[key] = {"id": row["_id"], "name": row["玩家"], "identity_status": row["_identity_status"],
+            "elo": round(elo[key], 1), "perf": round(perf, 1), "mmr": mmr_num,
+            "mmr_rating": round(mmr_rating, 1), "rating": round(rating, 1),
+            "provisional": provisional, "role": row["定位"], "games": row["场次"],
+            "win_rate": row["_winrate"], "gpm": row["平均GPM"], "xpm": row["平均XPM"],
+            "kda": row["KDA"], "kd": row["平均K/D/A"], "samples": row["_samples"]}
     return players
 
 
@@ -282,9 +196,9 @@ def print_ratings(players):
         mark = "*" if p.get("provisional") else ""
         print(f"{p['name'][:16] + mark:<18}{p['rating']:>7.1f}{p['elo']:>7.1f}{p['perf']:>7.1f}"
               f"{str(p['mmr']):>6}{p['role']:>6}{p['games']:>5}{p['win_rate']*100:>7.1f}%"
-              f"{p['kda']:>7.2f}{p['kd']:>18}{p['gpm']:>7.1f}{p['xpm']:>7.1f}")
+              f"{str(p['kda'] if p['kda'] is not None else '-'):>7}{p['kd']:>18}{str(p['gpm']):>7}{str(p['xpm']):>7}")
     if any(p.get("provisional") for p in players.values()):
-        print(f"* 场次少于 2 场，综合分暂按 {BASE:.0f} 处理")
+        print(f"* 场次少于 2 场、身份待确认或评分数据不完整，综合分暂按 {BASE:.0f} 处理")
 
 
 def main():
@@ -341,7 +255,7 @@ def main():
         key = norm(name)
         candidates = [
             n for n in players
-            if key == norm(n) or key in norm(n) or norm(n) in key
+            if key == norm(players[n]["name"]) or key in norm(players[n]["name"]) or norm(players[n]["name"]) in key
         ]
         if len(candidates) == 1:
             resolved.append(candidates[0])
@@ -349,9 +263,12 @@ def main():
             missing.append(name)
     if missing:
         print(f"\n找不到这些玩家: {', '.join(missing)}")
-        print("可用玩家:", ", ".join(sorted(players)))
+        print("可用玩家:", ", ".join(sorted(p["name"] for p in players.values())))
         return 1
 
+    if len(set(resolved)) != 10:
+        print("名单中包含重复账号。")
+        return 1
     args = resolved
     selected = {n: players[n] for n in args}
     core_count = sum(1 for p in selected.values() if p["role"] == "核心")

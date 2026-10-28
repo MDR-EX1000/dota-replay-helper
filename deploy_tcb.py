@@ -18,6 +18,8 @@ import subprocess
 import sys
 
 import scan_new
+from local_tools import find_tcb
+from release_preflight import dataset_report
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(ROOT, "cloudbase.json")
@@ -28,6 +30,8 @@ STATE_DIR = os.path.join(ROOT, "state")
 # 参与页面生成的配置；只同步哈希，不同步内容（其中含 SteamID）
 CONFIG_FILES = [
     "aliases.json",
+    "legacy_identities.json",
+    "roles.json",
     "baselines.json",
     "mmr.json",
     "hero_names_zh.json",
@@ -52,9 +56,17 @@ def config_hash():
 
 def sync_state():
     """把比赛 JSON 原样同步到云端解析服务使用的 state（保留 SteamID）。"""
+    profile_path = os.path.join(STATE_DIR, "steam_profiles.json")
+    profiles = None
+    if os.path.isfile(profile_path):
+        with open(profile_path, "rb") as fp:
+            profiles = fp.read()
     if os.path.isdir(STATE_DIR):
         shutil.rmtree(STATE_DIR)
     os.makedirs(STATE_DIR)
+    if profiles is not None:
+        with open(profile_path, "wb") as fp:
+            fp.write(profiles)
     ids = []
     for name in sorted(os.listdir(JSON_DIR)):
         if not (name.startswith("match_") and name.endswith(".json")):
@@ -106,6 +118,10 @@ def pull_state(tcb, env_id):
         )
         if r.returncode != 0:
             return 0
+        profile_path = os.path.join(tmp, "steam_profiles.json")
+        if os.path.isfile(profile_path):
+            from steam_profiles import merge_cache
+            merge_cache(profile_path, os.path.join(STATE_DIR, "steam_profiles.json"))
         added = 0
         for name in os.listdir(tmp):
             if not (name.startswith("match_") and name.endswith(".json")):
@@ -142,7 +158,21 @@ def ensure_login(tcb):
     """有密钥时自动登录，避免每次手动 tcb login。"""
     sid, skey, token = load_secret()
     if not (sid and skey):
-        return True  # 没有密钥，沿用已有登录状态
+        key_path = os.path.join(ROOT, "cloudbase.apikey")
+        try:
+            with open(key_path, encoding="utf-8-sig") as fp:
+                api_key = fp.read().strip()
+            with open(CONFIG, encoding="utf-8-sig") as fp:
+                env_id = json.load(fp).get("env_id")
+        except (OSError, ValueError, AttributeError):
+            api_key, env_id = "", ""
+        if api_key and env_id:
+            # Do not echo credentials or CLI output into application logs.
+            print("使用项目 CloudBase API Key 登录…")
+            result = subprocess.run([tcb, "login", "--cloudbase-api-key", api_key, "-e", env_id],
+                                    cwd=ROOT, capture_output=True)
+            return result.returncode == 0
+        return True  # 沿用已有登录状态；预检不会据此声称已验证权限
     cmd = [tcb, "login", "--apiKeyId", sid, "--apiKey", skey]
     if token:
         cmd += ["--token", token]
@@ -167,7 +197,7 @@ def main():
     except Exception as exc:
         print(f"  扫描失败，继续使用现有 JSON: {exc}")
 
-    tcb = shutil.which("tcb")
+    tcb = find_tcb()
     if not tcb:
         print("未找到 tcb 命令，请先安装：npm i -g @cloudbase/cli")
         return 1
@@ -182,13 +212,18 @@ def main():
     else:
         print("2/4 云端没有需要补回的比赛")
 
+    dataset = dataset_report(ROOT)
+    if not dataset["ready"]:
+        print("正式比赛数据不完整，已停止生成与发布；请先补齐全部原始 JSON 并运行 release_preflight.py")
+        return 1
+
     print("3/4 生成统计与网页…")
     for script in ("stats.py", "make_web.py"):
         subprocess.run([sys.executable, os.path.join(ROOT, script)], cwd=ROOT, check=True)
 
     print("     同步云端解析状态…")
     count = sync_state()
-    print(f"     state 含 {count} 场比赛（已脱敏）")
+    print(f"     state 含 {count} 场比赛（完整数据，含 SteamID）")
 
     data_file = os.path.join(ROOT, "docs", "data", "matches.js")
     if not os.path.isfile(data_file) or os.path.getsize(data_file) < 100:

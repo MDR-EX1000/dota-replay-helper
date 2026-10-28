@@ -7,11 +7,11 @@
     python build_cloudrun.py --deploy    # 组装后提交云端构建部署
 
 数据来源:
-    --data-root 指定含 json/ 的仓库目录，默认 C:/Users/admin/Desktop/replay
+    --data-root 指定含 json/ 的仓库目录，默认当前项目根目录
     比赛 JSON 原样打包（保留 SteamID），镜像和云端 state 都不脱敏。
 
 口令:
-    环境变量 UPLOAD_CODE，或本地 upload_code.txt，默认 zgnb。
+    必须明确提供环境变量 UPLOAD_CODE 或本地 upload_code.txt，不使用默认口令。
 """
 
 import argparse
@@ -20,10 +20,13 @@ import os
 import shutil
 import subprocess
 import sys
+import steam_profiles
+from local_tools import find_tcb
+from release_preflight import dataset_report
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(ROOT, "cloudrun_build")
-DEFAULT_DATA_ROOT = r"C:\Users\admin\Desktop\replay"
+DEFAULT_DATA_ROOT = ROOT
 
 APP_FILES = [
     "stats.py",
@@ -31,8 +34,13 @@ APP_FILES = [
     "make_web.py",
     "make_match_data.py",
     "rating.py",
+    "player_data.py",
+    "match_titles.py",
+    "web_safety.py",
+    "steam_profiles.py",
     "cloudbase.json",
     "aliases.json",
+    "legacy_identities.json",
     "baselines.json",
     "mmr.json",
     "hero_names_zh.json",
@@ -44,11 +52,21 @@ APP_FILES = [
 ]
 
 SERVICE_NAME = "dota-upload"
-ENV_ID = "unhappy-grouse-d3gsbs7inb2cb10d6"
+try:
+    with open(os.path.join(ROOT, "cloudbase.json"), encoding="utf-8") as fp:
+        PROJECT_CONFIG = json.load(fp)
+except (OSError, ValueError):
+    PROJECT_CONFIG = {}
+if not isinstance(PROJECT_CONFIG, dict):
+    PROJECT_CONFIG = {}
+ENV_ID = PROJECT_CONFIG.get("env_id", "")
+SERVICE_NAME = PROJECT_CONFIG.get("upload_service_name", SERVICE_NAME)
 
 # 参与页面生成的配置；与 deploy_tcb.py / upload_service/server.js 保持一致
 CONFIG_FILES = [
     "aliases.json",
+    "legacy_identities.json",
+    "roles.json",
     "baselines.json",
     "mmr.json",
     "hero_names_zh.json",
@@ -76,7 +94,7 @@ def load_api_key():
     path = os.path.join(ROOT, "cloudbase.apikey")
     if not os.path.isfile(path):
         return ""
-    with open(path, encoding="utf-8") as fp:
+    with open(path, encoding="utf-8-sig") as fp:
         return fp.read().strip()
 
 
@@ -86,9 +104,9 @@ def load_upload_code():
         return code
     path = os.path.join(ROOT, "upload_code.txt")
     if os.path.isfile(path):
-        with open(path, encoding="utf-8") as fp:
+        with open(path, encoding="utf-8-sig") as fp:
             return fp.read().strip()
-    return "zgnb"
+    return ""
 
 
 def copy(src, dst):
@@ -108,6 +126,22 @@ def dir_size(path):
 
 
 def build(data_root):
+    data_root = os.path.abspath(data_root)
+    dataset = dataset_report(ROOT, data_root)
+    if not dataset["ready"]:
+        print("正式数据不完整，未组装：有效 %s 场，基线 %s 场，缺少 %s 场，无效文件 %s 个。" %
+              (dataset["count"], dataset["expected_count"], len(dataset["missing_ids"]), len(dataset["invalid"])))
+        return 1
+    if not ENV_ID or not PROJECT_CONFIG.get("domain"):
+        print("缺少目标环境或网站域名，未组装")
+        return 1
+    if not load_upload_code():
+        print("缺少线上实际上传口令（UPLOAD_CODE 或 upload_code.txt），未组装")
+        return 1
+    # Verify the exact deletion target before replacing a previous build.
+    build_path = os.path.realpath(BUILD)
+    if os.path.dirname(build_path) != os.path.realpath(ROOT) or os.path.basename(build_path) != "cloudrun_build":
+        raise ValueError("构建目录不在项目允许的位置")
     if os.path.isdir(BUILD):
         shutil.rmtree(BUILD)
     app = os.path.join(BUILD, "app")
@@ -123,6 +157,8 @@ def build(data_root):
             print(f"[警告] 缺少 {name}，跳过")
             continue
         copy(src, os.path.join(app, name))
+    if os.path.isfile(os.path.join(ROOT, "roles.json")):
+        copy(os.path.join(ROOT, "roles.json"), os.path.join(app, "roles.json"))
 
     copy(os.path.join(ROOT, "upload_service", "server.js"), os.path.join(BUILD, "service", "server.js"))
     copy(os.path.join(ROOT, "upload_service", "Dockerfile"), os.path.join(BUILD, "Dockerfile"))
@@ -148,7 +184,7 @@ def build(data_root):
         ignore=shutil.ignore_patterns(".git", "*.dem", "testdata"),
     )
 
-    # 4. 比赛数据（去 SteamID），同时作为 state 种子
+    # 4. 完整比赛数据（保留 SteamID），同时作为 state 种子
     json_src = os.path.join(data_root, "json")
     ids = []
     if os.path.isdir(json_src):
@@ -172,13 +208,17 @@ def build(data_root):
     with open(os.path.join(app, "state", "index.json"), "w", encoding="utf-8") as fp:
         json.dump(index, fp, ensure_ascii=False, indent=2)
 
+    if steam_profiles.CACHE_PATH.is_file():
+        copy(str(steam_profiles.CACHE_PATH), os.path.join(app, "state", "steam_profiles.json"))
+
     # 5. 密钥（不进 git，只进私有镜像）
     secrets = {
         "envId": ENV_ID,
         "serviceName": SERVICE_NAME,
-        "domain": "https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/",
+        "domain": PROJECT_CONFIG["domain"],
         "uploadCode": load_upload_code(),
         "apiKey": load_api_key(),
+        "steamApiKey": steam_profiles.load_key(),
     }
     with open(os.path.join(app, "secrets.json"), "w", encoding="utf-8") as fp:
         json.dump(secrets, fp, ensure_ascii=False, indent=2)
@@ -188,7 +228,7 @@ def build(data_root):
 
     print(f"组装完成: {BUILD}")
     print(f"  比赛 {len(ids)} 场，体积 {dir_size(BUILD) / 1024 / 1024:.1f} MB")
-    print(f"  上传口令: {secrets['uploadCode']}")
+    print("  上传口令：已配置（不输出内容）")
     return 0
 
 
@@ -200,13 +240,17 @@ def run_cmd(cmd, **kwargs):
 
 
 def deploy():
+    tcb = find_tcb()
+    if not tcb:
+        print("未找到 CloudBase CLI，请运行 python tools/setup_local_tools.py")
+        return 1
     key_path = os.path.join(ROOT, "cloudbase.apikey")
     if os.path.isfile(key_path):
         with open(key_path, encoding="utf-8") as fp:
             key = fp.read().strip()
-        run_cmd(["tcb", "login", "--cloudbase-api-key", key, "-e", ENV_ID], check=False)
+        run_cmd([tcb, "login", "--cloudbase-api-key", key, "-e", ENV_ID], check=False)
     cmd = [
-        "tcb", "cloudrun", "deploy",
+        tcb, "cloudrun", "deploy", "-e", ENV_ID,
         "--source", BUILD,
         "-s", SERVICE_NAME,
         "--port", "8080",

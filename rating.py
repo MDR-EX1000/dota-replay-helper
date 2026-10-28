@@ -4,10 +4,22 @@
   - 所有指标取“占本队总量的份额 x5”，均值恒为 1，跨英雄/跨定位可比
   - 角色按本队净资产排名连续加权：前排位偏经济/输出，后排位偏功能/参战
   - 死亡扣分、胜负加成；MVP 取胜方最高分，SVP 取败方最高分
+  - schema 3 的缺失值（None）不参与计算，缺数据的选手不评 MVP/SVP 与标签
 """
 
 # 净资产排名(0=最高) -> 核心度 1..0
 CORE_W = [1.0, 0.9, 0.7, 0.3, 0.0]
+
+# 评分/标签依赖的字段；任一缺失就不对该选手评分
+FIELDS = (
+    "kills", "deaths", "assists", "net_worth", "hero_damage",
+    "tower_damage", "hero_damage_taken", "stuns", "healing",
+    "wards_placed", "wards_destroyed",
+)
+
+
+def _complete(p):
+    return all(p.get(field) is not None for field in FIELDS)
 
 
 def _share(v, total):
@@ -17,8 +29,10 @@ def _share(v, total):
 def rate_players(players, winner):
     out = {}
     for team in ("radiant", "dire"):
-        ps = sorted((p for p in players if p["team"] == team),
+        ps = sorted((p for p in players if p["team"] == team and _complete(p)),
                     key=lambda p: -p["net_worth"])
+        if not ps:
+            continue
         T = lambda k: sum(p[k] for p in ps)
         tk, td = T("kills"), T("deaths")
         for i, p in enumerate(ps):
@@ -51,6 +65,8 @@ def rate_players(players, winner):
     # 线性映射到 0-10：raw≈0.9 为 6 分
     res = {}
     for p in players:
+        if p["pid"] not in out:
+            continue
         r = out[p["pid"]]
         s = 6.0 + (r - 0.9) * 5.0
         if p["team"] == winner:
@@ -60,23 +76,38 @@ def rate_players(players, winner):
 
 
 def apply(players, winner):
+    for p in players:
+        p["score"] = None
+        p["title"] = ""
+        p["kda_title"] = ""
+        p["tags"] = []
+
+    if winner not in ("radiant", "dire"):
+        return players
+
     scores = rate_players(players, winner)
     for p in players:
-        p["score"] = scores[p["pid"]]
-        p["title"] = ""
-        # KDA 称号：天之上 > 天秀 > 秀，互斥
-        kda = (p["kills"] + p["assists"]) / max(p["deaths"], 1)
-        if kda >= 15 and p["deaths"] == 0:
+        if p["pid"] in scores:
+            p["score"] = scores[p["pid"]]
+
+    # KDA 称号：天之上 > 天秀 > 秀，互斥；缺字段不评
+    for p in players:
+        kills, deaths, assists = p.get("kills"), p.get("deaths"), p.get("assists")
+        if None in (kills, deaths, assists):
+            continue
+        kda = (kills + assists) / max(deaths, 1)
+        if kda >= 15 and deaths == 0:
             p["kda_title"] = "天之上"
         elif kda >= 15:
             p["kda_title"] = "天秀"
         elif kda >= 10:
             p["kda_title"] = "秀"
-        else:
-            p["kda_title"] = ""
+
     # 负面/特色称号：不互斥，可同时获得；展示顺序固定为 僵、硬、瘤、莽
     for team in ("radiant", "dire"):
-        ps = [p for p in players if p["team"] == team]
+        ps = [p for p in players if p["team"] == team and _complete(p)]
+        if not ps:
+            continue
         T = lambda k: sum(p[k] for p in ps)
         tk, td = T("kills"), T("deaths")
         tt = T("hero_damage_taken")
@@ -106,10 +137,12 @@ def apply(players, winner):
                     and death_share >= 1.3 and kda < 1.2):
                 tags.append("莽")
             p["tags"] = tags
+
     loser = "dire" if winner == "radiant" else "radiant"
     for team, title in ((winner, "MVP"), (loser, "SVP")):
-        ps = [p for p in players if p["team"] == team]
+        ps = [p for p in players if p["team"] == team and p["pid"] in scores]
         if ps:
-            best = max(ps, key=lambda p: (p["score"], p["kills"] + p["assists"]))
+            best = max(ps, key=lambda p: (p["score"],
+                                          (p.get("kills") or 0) + (p.get("assists") or 0)))
             best["title"] = title
     return players

@@ -19,6 +19,7 @@ import shutil
 import sys
 
 import deploy_tcb
+from local_tools import find_tcb
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 JSON_DIR = os.path.join(ROOT, "json")
@@ -56,7 +57,7 @@ def main():
         say("cloudbase.json 中缺少 env_id")
         return 1
 
-    tcb = shutil.which("tcb")
+    tcb = find_tcb()
     if not tcb:
         say("未找到 tcb，请先安装：npm i -g @cloudbase/cli")
         return 1

@@ -3,6 +3,12 @@
 本地解析 Dota 2 重放（`.dem`），统计玩家数据、计算评分，并按规则生成 5v5 对黑阵容。
 也可以在网页上直接上传 `.dem`，由云端自动解析并发布。
 
+本地开发版本已加入玩家个人资料、账号身份修正、缺失数据处理、七种单场称号和 Steam 头像。完整变更、数据口径和验收方式见 [本轮改动说明](CHANGELOG.md)。当前仍处于本地验收阶段，尚未推送或发布。
+
+本机工具已准备为项目内安装；交接内容、只读预检和正式发布前的顺序见 [发布准备与交接](PREPARE_RELEASE.md)。可双击 `一键发布预检.bat` 查看就绪状态，该入口不会登录或发布。
+
+也可双击 `一键本地验收.bat` 运行测试并生成两场样例预览，不依赖全局 npm/tcb，不会连接腾讯云或刷新 Steam 头像。
+
 ## 数据流
 
 ```
@@ -32,11 +38,19 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 
 ## 目录
 
-仓库根目录就是 `C:\Users\admin\Desktop\replay`。
+以下结构以仓库根目录为基准；本地路径可以自行选择。
 
 ```
 replay/
 ├── stats.py / balance.py / roll.py / make_web.py / make_match_data.py
+├── player_data.py             # 共享身份识别与缺失感知统计
+├── match_titles.py / web_safety.py  # 单场称号与页面序列化
+├── steam_profiles.py          # 随录像变化刷新头像，公开缓存
+├── steam.secret.example.json  # Steam Key 配置模板，真实配置忽略
+├── legacy_identities.json     # 人工确认旧昵称对应的账号
+├── CHANGELOG.md / tests/      # 本轮变更说明与回归测试
+├── PREPARE_RELEASE.md / release_preflight.py  # 交接清单与离线发布预检
+├── tcb.cmd / npm.cmd / tools/ # 项目内工具入口与安装脚本
 ├── reparse_known.py           # 安全重解析已有比赛
 ├── make_name_maps.py          # 中文装备/技能名映射
 ├── item_names_zh.json / item_aliases.json / item_ids.json
@@ -56,6 +70,8 @@ replay/
 ├── hero_names_zh.json         # 英雄英文 key → 中文名
 ├── mmr.json                   # 玩家 MMR 登记（默认空 = 未登记）
 ├── docs/index.html            # 公开网页
+├── docs/player_profiles.js / .css  # 玩家资料页源码
+├── docs/hero_portraits.json / item_icons.json  # 在线图片地址映射
 ├── docs/vendor/               # marked + DOMPurify（本地托管）
 ├── docs/data/matches.js       # 比赛明细数据（公开，无 SteamID）
 ├── mantatool/                 # Go 解析器源码与 parse.exe
@@ -71,7 +87,7 @@ replay/
 | `stats.py` | 汇总玩家数据（胜率、KDA、GPM/XPM、伤害/经济等） |
 | `balance.py` | 计算 Elo + 表现分，枚举并排序 5v5 分法 |
 | `roll.py` | 规则化 roll（R1–R5），只在合格方案里随机 |
-| `make_web.py` | 生成五 Tab 网页到 `docs/index.html` |
+| `make_web.py` | 生成统计、玩家资料、比赛明细等六 Tab 网页到 `docs/index.html` |
 | `sync_cloud.py` | 补回网页上传的比赛到本地 `json/`，不发布 |
 | `make_match_data.py` | 从比赛 JSON 生成 `docs/data/matches.js` |
 | `reparse_known.py` | 只重解析已有比赛，补齐事件/经济/装备时间线 |
@@ -81,7 +97,7 @@ replay/
 | `check_dem.py` | 检查已解析比赛是否都有本地 `.dem`，可报告并复制 D 盘可找回的录像 |
 | `deploy_ai.py` | 部署 `roll-ai` 云函数，写入 AI 端点并重新发布网页 |
 | `cloudfunctions/roll-ai/` | DeepSeek 代理：对话、工具调用、限流 |
-| `cloudbase.json` | 环境 ID、默认访问域名、`ai_endpoint` |
+| `cloudbase.json` | 环境 ID、访问域名、AI/上传端点，可选 `upload_service_name` |
 | `aliases.json` | 同一玩家多账号合并配置 |
 | `baselines.json` | 核心 / 酱油的表现分基准值，可分别调整 |
 | `mmr.json` | 玩家 MMR 登记，默认空（全部显示 `-`） |
@@ -140,7 +156,7 @@ https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/
 
 ## 比赛明细
 
-第四个 Tab「比赛明细」提供单场详情：
+「比赛明细」提供单场详情：
 
 - 比赛列表 + 详情：胜负、比分、时长、模式
 - 总览：双方 KPI、记分板、英雄中文名、KDA、净资产、GPM/XPM、正反补、装备
@@ -156,6 +172,71 @@ https://unhappy-grouse-d3gsbs7inb2cb10d6-1514393073.tcloudbaseapp.com/
 ```bash
 python reparse_known.py --all-known
 ```
+
+## 玩家资料
+
+在“玩家资料”搜索昵称并选择玩家，或点击统计表、对局记分板中的玩家名进入。选人区的“资料”链接不会改变已选名单。
+
+资料页分为五个栏目：
+
+| 栏目 | 内容 |
+|---|---|
+| 概览 | Steam 头像、最新录像昵称/固定别名、定位、登记 MMR、综合分、胜负、KDA、GPM/XPM、伤害、近期状态、常用英雄、称号累计 |
+| 比赛记录 | 按英雄及结果筛选，每页 10 场，展示终局装备和称号，可进入比赛详情 |
+| 英雄统计 | 出场次数、胜率、KDA、GPM/XPM、最近使用时间 |
+| 队友 | 同队场次、胜负、同队胜率、最近同队时间，可进入队友资料 |
+| 对手 | 交手场次、胜负、对抗胜率、最近交手时间，可进入对手资料 |
+
+队友和对手的胜负均以当前资料页玩家为视角；未知结果不计入胜率分母，阵营缺失时不推断队友/对手关系。缺失数值不当成 0，平均值附有效样本数。所有数据仅覆盖本项目录入的练习赛，不代表完整天梯战绩。
+
+MMR 仍通过 `mmr.json` 手动登记。本轮没有加入段位查询或自动估计 MMR；评分权重维持原有规则。
+
+资料链接格式为 `#player=p_…&view=overview`，其余栏目为 `matches`、`heroes`、`peers`、`opponents`。链接使用公开玩家标识，支持直接打开和浏览器返回。
+
+英雄和物品图片来自 Steam CDN，本地只保存地址映射（`docs/hero_portraits.json`、`docs/item_icons.json`），不下载图片文件。图片加载失败时保留文字或占位。人物头像、英雄及物品图片分别处理，后两者不需要 Steam API Key。界面结构参考及实现细节见 [本轮改动说明](CHANGELOG.md)。
+
+## 本地身份修正与单场称号（v1）
+
+内部按有效 SteamID 识别账号，昵称只用于展示。同账号改名会合并；重名的不同账号分别统计，并以公开标识后缀区分。公开页面只输出散列后的玩家标识，不输出 SteamID；该标识用于关联记录，不承诺匿名性。
+
+`aliases.json` 中的昵称映射只修改显示名；需要合并多个账号时，为这些 **SteamID** 配置相同的名称。只有昵称的历史数据会标记“身份待确认”，不会凭重名自动归并。人工确认后可在 `legacy_identities.json` 写入 `{"旧昵称": "SteamID64"}`；这个配置会作用于所有同名旧记录，存在重名时应先逐场核实。
+
+Go 解析器输出 schema 3：未读到的数值保留 `null`，并记录 `data_quality.missing_fields`；真实零值保留为 0。旧版结果的字段来源无法凭输出核实，建议重解析。统计使用每项指标的有效场次，网页悬停 GPM/XPM/KDA/伤害经济比可查看样本数。评分核心指标不完整或身份待确认时，综合分暂按 1000 标为暂定；不使用缺失值充当零分。
+
+比赛总览新增七种称号：MVP、富豪、破敌、破军、偏将、补王、英魂。点击徽章可查看本场依据，展开“称号规则与数据说明”可查看公式和停评原因。
+
+- 仅评选双方各 5 人、时长超过 3 分钟、胜负已知的比赛；一人可多称号。
+- 富豪取全场净资产最高；破敌取胜方击杀最高；补王取全场反补最高；偏将取全场辅助分最高。辅助分 = 助攻 + 2×插眼 + 3×排眼。
+- 破军取全场敌方塔最后一击数最高。排除小兵击塔和反补；可唯一归属的蛇棒计给暗影萨满，未知召唤物使该项暂不评选。正补塔数全员相同时不颁发。
+- 综合分 = 100×（30% KDA + 25% 英雄伤害 + 15% 推塔伤害 + 10% 眩晕 + 10% 治疗 + 10% 辅助分），KDA = (击杀+助攻)/(死亡+1)。各项除以全场最高值，最高为零时该项记零。
+- 胜方综合分第一为 MVP，败方第一为英魂，各一人；使用未舍入分数，同分依次比较 KDA、击杀、较少死亡、较小比赛内编号。
+- 基础称号允许并列，最高为零不颁发。依赖数据不完整时，暂停对应称号；不影响独立指标的称号。
+
+称号名称参考 11 平台经典体系；上述综合分、辅助分、并列处理和适用阵营是 **本项目自拟 v1 规则**，不代表 11 平台原始算法。称号分与对黑匹配评分相互独立，当前只展示单场称号。
+
+两份验证录像位于 `replay/` 时，只在本地解析与预览：
+
+```powershell
+.\mantatool\parse.exe --out .\json\feature_validation .\replay\9064327315.dem .\replay\9064411460.dem
+python make_web.py --matches-dir json/feature_validation --output-dir cloudrun_test/preview --local-preview
+python -m http.server 8765 --bind 127.0.0.1 --directory cloudrun_test/preview
+```
+
+浏览器访问 `http://127.0.0.1:8765/#match=9064411460`。`--local-preview` 清空云端上传和 AI 接口，仅生成本地静态文件；不会推送、发布，也不会覆盖已跟踪的 `docs/` 历史数据。无有效比赛时生成器会保留现有页面并退出。解析器需先按 `mantatool/go.mod` 的本地 manta 依赖完成构建。
+
+验证命令：`python -B -m unittest discover -s tests -v`、`node --test tests/player_profiles.test.cjs`；在 `mantatool/` 中运行 `go test .`。
+
+## Steam 头像
+
+在 [Steam 官方页面](https://steamcommunity.com/dev/apikey)申请普通用户 Web API Key；域名填写本项目实际网站的主机名（不含 `https://` 和路径）。本地复制 `steam.secret.example.json` 为 `steam.secret.json`，将 Key 填入 `api_key`；也支持环境变量 `STEAM_WEB_API_KEY`，环境变量优先。`steam.secret.json` 已被 Git 忽略，Key 不会进入网页或头像缓存。
+
+头像在成功录入新录像、或某场录像解析数据变化后的页面生成阶段更新，仅查询相关选手；普通页面重建使用缓存，不会按打开页面次数请求 Steam。Steam 昵称不覆盖录像昵称或人工别名。一个玩家有多个合并账号时，使用其比赛时间最新的账号查询头像。
+
+`state/steam_profiles.json` 保存公开玩家标识、Steam CDN 头像 URL、同步时间和录像内容指纹，不保存 Key、SteamID 或 Steam 返回的其他个人资料。同步失败时保留原缓存，不阻断比赛处理；没有头像或图片加载失败时显示昵称首字。部分账号未返回头像时会保留已有头像，并在下次页面生成时重试未完成的同步。
+
+本地与云端同步会保留头像缓存。将来部署上传服务时，可设置服务端环境变量 `STEAM_WEB_API_KEY`；现有构建脚本也支持从本地配置读取 Key 写入私有镜像的 `secrets.json`。当前只进行本地验证，不会自动部署。
+
+如需在生成页面时禁止查询 Steam 头像 API，添加 `--no-avatar-refresh`；浏览器仍按需加载在线图片。`--local-preview` 关闭云端上传和 AI 接口，头像同步仍遵循录像变化规则。
 
 ## AI 匹配助手
 
@@ -223,6 +304,8 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 
 口令提示文字在 `cloudbase.json` 的 `upload_hint` 配置；默认只写「口令见群公告」，
 不要直接把口令写进公开页面，否则口令就失去作用了。
+
+构建上传服务前必须明确设置 `UPLOAD_CODE` 或填写本地 `upload_code.txt`，不再回退到默认口令。构建前也会核对完整原始数据，避免打包两场验证数据或其他电脑的旧目录。
 
 限制与行为：
 
@@ -328,6 +411,6 @@ AI 对话时，当前 10 人的玩家名、评分和统计会发送给 DeepSeek�
 
 ## 已知限制
 
-- 目前样本仍不算多（14 场），评分区分度有限
+- 样本较少时，评分、英雄胜率及对抗胜率仅供已录入练习赛内参考
 - 位置（核心/酱油）按每场净资产排名推断，非人工标注
 - 玩家名含特殊字符时，脚本支持模糊匹配
