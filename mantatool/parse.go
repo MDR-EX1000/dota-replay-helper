@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -71,6 +72,15 @@ func asFloat(v interface{}) float64 {
 	return 0
 }
 
+func hasNumber(v interface{}) bool {
+	switch v.(type) {
+	case int32, uint32, int64, uint64, float32, float64:
+		f := asFloat(v)
+		return !math.IsNaN(f) && !math.IsInf(f, 0) && f >= 0
+	}
+	return false
+}
+
 func asString(v interface{}) string {
 	if s, ok := v.(string); ok {
 		return s
@@ -134,10 +144,10 @@ type damageCategories struct {
 }
 
 type damageInfo struct {
-	Dealt       damageTypes      `json:"dealt"`
-	Taken       damageTypes      `json:"taken"`
-	DealtCat    damageCategories `json:"dealt_category"`
-	TakenCat    damageCategories `json:"taken_category"`
+	Dealt    damageTypes      `json:"dealt"`
+	Taken    damageTypes      `json:"taken"`
+	DealtCat damageCategories `json:"dealt_category"`
+	TakenCat damageCategories `json:"taken_category"`
 }
 
 type killInternal struct {
@@ -153,14 +163,14 @@ type killInternal struct {
 }
 
 type objectiveInternal struct {
-	T        float64
-	Kind     string
-	Team     string
-	Target   string
-	Lane     string
-	Tier     int
-	Killer   string
-	Denied   bool
+	T      float64
+	Kind   string
+	Team   string
+	Target string
+	Lane   string
+	Tier   int
+	Killer string
+	Denied bool
 }
 
 type purchaseInternal struct {
@@ -170,8 +180,10 @@ type purchaseInternal struct {
 }
 
 type econSample struct {
-	NW int64
-	XP int64
+	NW      int64
+	XP      int64
+	NWValid bool
+	XPValid bool
 }
 
 type econPoint struct {
@@ -302,7 +314,7 @@ func parse(path, outDir string, writeRaw bool) error {
 		_, lane, tier := classifyObjective(target)
 		objectives = append(objectives, objectiveInternal{
 			T: t, Kind: kind, Team: destroyer, Target: target,
-			Lane: lane, Tier: tier, Killer: killer,
+			Lane: lane, Tier: tier, Killer: killer, Denied: targetTeam != "" && targetTeam == destroyer,
 		})
 	}
 
@@ -330,7 +342,7 @@ func parse(path, outDir string, writeRaw bool) error {
 				if snapshots[sid] == nil {
 					snapshots[sid] = map[int]econSample{}
 				}
-				snapshots[sid][minute] = econSample{NW: nw, XP: xp}
+				snapshots[sid][minute] = econSample{NW: nw, XP: xp, NWValid: hasNumber(td[prefix+"m_iNetWorth"]), XPValid: hasNumber(td[prefix+"m_iTotalEarnedXP"])}
 			}
 		}
 	}
@@ -420,11 +432,11 @@ func parse(path, outDir string, writeRaw bool) error {
 				}
 				kills = append(kills, killInternal{
 					T: t, Killer: killer, KillerSource: attackerName,
-					Victim: victim,
+					Victim:     victim,
 					KillerTeam: teamName(int32(m.GetAttackerTeam())),
 					VictimTeam: teamName(int32(m.GetTargetTeam())),
-					AssistIDs: assists,
-					Inflictor: snake(strings.TrimPrefix(nameOf(m.GetInflictorName()), "item_")),
+					AssistIDs:  assists,
+					Inflictor:  snake(strings.TrimPrefix(nameOf(m.GetInflictorName()), "item_")),
 					FirstBlood: fb,
 				})
 				return nil
@@ -514,6 +526,7 @@ func parse(path, outDir string, writeRaw bool) error {
 		wardsPlaced, wardsDestroyed                      int64
 	}
 	statsBySteam := map[uint64]teamStats{}
+	statsSourceBySteam := map[uint64]map[string]interface{}{}
 	for _, td := range teamData {
 		for j := 0; j < 10; j++ {
 			prefix := fmt.Sprintf("m_vecDataTeam.%04d.", j)
@@ -521,6 +534,13 @@ func parse(path, outDir string, writeRaw bool) error {
 			if !ok || sid == 0 {
 				continue
 			}
+			source := map[string]interface{}{}
+			for key, value := range td {
+				if strings.HasPrefix(key, prefix) {
+					source[strings.TrimPrefix(key, prefix)] = value
+				}
+			}
+			statsSourceBySteam[sid] = source
 			statsBySteam[sid] = teamStats{
 				netWorth:       asInt(td[prefix+"m_iNetWorth"]),
 				earnedGold:     asInt(td[prefix+"m_iTotalEarnedGold"]),
@@ -580,7 +600,7 @@ func parse(path, outDir string, writeRaw bool) error {
 		if snapshots[steam] == nil {
 			snapshots[steam] = map[int]econSample{}
 		}
-		snapshots[steam][finalMinute] = econSample{NW: st.netWorth, XP: st.earnedXP}
+		snapshots[steam][finalMinute] = econSample{NW: st.netWorth, XP: st.earnedXP, NWValid: hasNumber(statsSourceBySteam[steam]["m_iNetWorth"]), XPValid: hasNumber(statsSourceBySteam[steam]["m_iTotalEarnedXP"])}
 	}
 
 	minutes := duration / 60.0
@@ -688,12 +708,45 @@ func parse(path, outDir string, writeRaw bool) error {
 			"items":                 items,
 			"abilities":             abilities,
 			"damage": map[string]interface{}{
-				"dealt":            di.Dealt,
-				"taken":            di.Taken,
-				"dealt_category":   di.DealtCat,
-				"taken_category":   di.TakenCat,
+				"dealt":          di.Dealt,
+				"taken":          di.Taken,
+				"dealt_category": di.DealtCat,
+				"taken_category": di.TakenCat,
 			},
 		}
+		missing := []string{}
+		source := statsSourceBySteam[steam]
+		sourceFields := map[string][]string{
+			"net_worth": {"m_iNetWorth"}, "total_earned_gold": {"m_iTotalEarnedGold"},
+			"total_earned_xp": {"m_iTotalEarnedXP"}, "gold_per_min": {"m_iTotalEarnedGold"},
+			"xp_per_min": {"m_iTotalEarnedXP"}, "last_hits": {"m_iLastHitCount"},
+			"denies": {"m_iDenyCount"}, "hero_damage": {"m_flHeroDamage"},
+			"tower_damage": {"m_flTowerDamage"}, "hero_healing": {"m_fHealing"},
+			"stuns": {"m_fStuns"}, "observer_sentry_wards": {"m_iObserverWardsPlaced", "m_iSentryWardsPlaced"},
+			"wards_destroyed": {"m_iWardsDestroyed"},
+		}
+		for field, sources := range sourceFields {
+			valid := true
+			for _, prop := range sources {
+				if !hasNumber(source[prop]) {
+					valid = false
+				}
+			}
+			if (field == "gold_per_min" || field == "xp_per_min") && duration <= 0 {
+				valid = false
+			}
+			if !valid {
+				pl[field] = nil
+				missing = append(missing, field)
+			}
+		}
+		for field, prop := range map[string]string{"kills": "m_iKills", "deaths": "m_iDeaths", "assists": "m_iAssists", "level": "m_iLevel"} {
+			if !hasNumber(pr[tp+prop]) {
+				pl[field] = nil
+				missing = append(missing, field)
+			}
+		}
+		pl["data_quality"] = map[string]interface{}{"verified": true, "missing_fields": missing}
 		if heroName != "" {
 			pl["hero_name"] = heroName
 		}
@@ -779,24 +832,25 @@ func parse(path, outDir string, writeRaw bool) error {
 		times = append(times, int(duration))
 		times[len(times)-1] = int(duration)
 	}
-	netWorthSeries := make([][]int64, 10)
-	xpSeries := make([][]int64, 10)
+	netWorthSeries := make([][]interface{}, 10)
+	xpSeries := make([][]interface{}, 10)
 	for i := 0; i < 10; i++ {
 		steam, _ := asUint64(pr[fmt.Sprintf("m_vecPlayerData.%04d.m_iPlayerSteamID", i)])
 		samples := snapshots[steam]
-		nw := make([]int64, len(times))
-		xp := make([]int64, len(times))
+		nw := make([]interface{}, len(times))
+		xp := make([]interface{}, len(times))
 		var cur econSample
 		for idx, tm := range times {
 			m := tm / 60
 			if sm, ok := samples[m]; ok {
 				cur = sm
 			}
-			if cur.NW == 0 {
-				cur.NW = 600
+			if cur.NWValid {
+				nw[idx] = cur.NW
 			}
-			nw[idx] = cur.NW
-			xp[idx] = cur.XP
+			if cur.XPValid {
+				xp[idx] = cur.XP
+			}
 		}
 		netWorthSeries[i] = nw
 		xpSeries[i] = xp
@@ -811,7 +865,7 @@ func parse(path, outDir string, writeRaw bool) error {
 	}
 
 	result := map[string]interface{}{
-		"schema":         2,
+		"schema":         3,
 		"match_id":       strconv.FormatUint(matchID, 10),
 		"game_mode":      gameMode,
 		"game_mode_name": gameModes[int32(gameMode)],
@@ -827,6 +881,9 @@ func parse(path, outDir string, writeRaw bool) error {
 		"objectives":     objectivesOut,
 		"purchases":      purchasesOut,
 		"economy":        economy,
+	}
+	if gameWinner != 2 && gameWinner != 3 {
+		result["radiant_win"] = nil
 	}
 	b, _ := json.MarshalIndent(result, "", "  ")
 	out := filepath.Join(outDir, fmt.Sprintf("match_%d.json", matchID))

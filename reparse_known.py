@@ -54,7 +54,7 @@ def reparse(match_id, replay_dir):
         print(f"  [失败] {match_id}: JSON 无效 {exc}")
         return False
 
-    if (str(data.get("match_id")) != match_id or data.get("schema") != 2
+    if (str(data.get("match_id")) != match_id or data.get("schema") not in (2, 3)
             or data.get("lobby_type") != 1 or len(data.get("players", [])) != 10
             or data.get("duration", 0) <= 0):
         print(f"  [失败] {match_id}: 数据校验不通过")
