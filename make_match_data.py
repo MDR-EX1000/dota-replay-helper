@@ -172,16 +172,6 @@ def transform_match(m, resolver=None, profile_cache=None):
             "damage": p.get("damage"),
         })
 
-    if isinstance(m.get("radiant_win"), bool):
-        rating.apply(players_out, "radiant" if m["radiant_win"] else "dire",
-                     m.get("objectives"))
-    else:
-        for p in players_out:
-            p["score"] = None
-            p["title"] = ""
-            p["kda_title"] = ""
-            p["tags"] = []
-
     score = {team: team_totals(players_out, team)["kills"] for team in ("radiant", "dire")}
     awards = assign_titles(players_out, m)
 
@@ -198,7 +188,7 @@ def transform_match(m, resolver=None, profile_cache=None):
         r for r in awards.get("rules", []) if "MVP" not in r and "英魂" not in r
     ]
     awards["rules"].append(
-        "MVP/SVP 使用 0–10 单局评分；KDA 称号（秀/天秀/天之上）与僵/硬/瘤/莽也由该评分体系给出。"
+        "MVP/SVP 使用 0–10 单局评分；败方高分可获虽败犹荣；KDA、敌塔师、光明系列及僵/硬/瘤/莽按单场指标授予。"
     )
 
 
@@ -284,7 +274,15 @@ def transform_match(m, resolver=None, profile_cache=None):
             ],
         }
 
-    rating.apply(players_out, "radiant" if m.get("radiant_win") else "dire", objectives)
+    if isinstance(m.get("radiant_win"), bool):
+        rating.apply(players_out, "radiant" if m["radiant_win"] else "dire", objectives)
+    else:
+        for p in players_out:
+            p["score"] = None
+            p["title"] = ""
+            p["kda_title"] = ""
+            p["tags"] = []
+            p["honor"] = False
 
     start = m.get("start_time", 0)
     return {
