@@ -167,13 +167,13 @@ def transform_match(m):
             "healing": p.get("hero_healing", 0),
             "stuns": p.get("stuns", 0),
             "wards_placed": p.get("observer_sentry_wards", 0),
+            "obs_wards": p.get("observer_wards_placed", 0),
+            "sen_wards": p.get("sentry_wards_placed", 0),
             "wards_destroyed": p.get("wards_destroyed", 0),
             "items": items,
             "abilities": abilities,
             "damage": p.get("damage"),
         })
-
-    rating.apply(players_out, "radiant" if m.get("radiant_win") else "dire")
 
     score = {
         "radiant": sum(p["kills"] for p in players_out if p["team"] == "radiant"),
@@ -258,6 +258,8 @@ def transform_match(m):
                 for p in players_out
             ],
         }
+
+    rating.apply(players_out, "radiant" if m.get("radiant_win") else "dire", objectives)
 
     start = m.get("start_time", 0)
     return {

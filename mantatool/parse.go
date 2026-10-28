@@ -512,6 +512,7 @@ func parse(path, outDir string, writeRaw bool) error {
 		netWorth, earnedGold, earnedXP, lastHits, denies int64
 		heroDamage, towerDamage, healing, stuns          float64
 		wardsPlaced, wardsDestroyed                      int64
+		obsPlaced, senPlaced                             int64
 	}
 	statsBySteam := map[uint64]teamStats{}
 	for _, td := range teamData {
@@ -531,6 +532,8 @@ func parse(path, outDir string, writeRaw bool) error {
 				towerDamage:    asFloat(td[prefix+"m_flTowerDamage"]),
 				healing:        asFloat(td[prefix+"m_fHealing"]),
 				stuns:          asFloat(td[prefix+"m_fStuns"]),
+				obsPlaced:      asInt(td[prefix+"m_iObserverWardsPlaced"]),
+				senPlaced:      asInt(td[prefix+"m_iSentryWardsPlaced"]),
 				wardsPlaced:    asInt(td[prefix+"m_iObserverWardsPlaced"]) + asInt(td[prefix+"m_iSentryWardsPlaced"]),
 				wardsDestroyed: asInt(td[prefix+"m_iWardsDestroyed"]),
 			}
@@ -684,6 +687,8 @@ func parse(path, outDir string, writeRaw bool) error {
 			"hero_healing":          int64(st.healing + 0.5),
 			"stuns":                 st.stuns,
 			"observer_sentry_wards": st.wardsPlaced,
+			"observer_wards_placed": st.obsPlaced,
+			"sentry_wards_placed":   st.senPlaced,
 			"wards_destroyed":       st.wardsDestroyed,
 			"items":                 items,
 			"abilities":             abilities,

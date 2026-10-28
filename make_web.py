@@ -130,6 +130,12 @@ TEMPLATE = r"""<!DOCTYPE html>
   .badge.tag-ying { color:#7fd4c1; background:#0f2422; border:1px solid #2f6b5e; }
   .badge.tag-liu { color:#a6d94a; background:#1c2608; border:1px solid #5a7a1f; }
   .badge.tag-mang { color:#e8a05a; background:#2a1a0e; border:1px solid #7a4a1f; }
+  .badge.honor { color:#8bd448; background:#14210a; border:1px solid #4a7a1f; font-weight:700;
+    text-shadow:0 0 7px rgba(139,212,72,.65); box-shadow:0 0 8px rgba(139,212,72,.3); }
+  .badge.tag-tower { color:#e8c37a; background:#2a1f0e; border:1px solid #8a6a2f; }
+  .badge.tag-ward { color:#ffe98a; background:#26240c; border:1px solid #8a8330; }
+  .badge.tag-ward2 { color:#ffe98a; background:#26240c; border:1px solid #b8ad3a; font-weight:700;
+    text-shadow:0 0 7px rgba(255,233,138,.6); box-shadow:0 0 8px rgba(255,233,138,.3); }
   .badge.prov { color:#ffcc66; background:#332b17; }
   .bar { position:sticky; bottom:0; margin:22px -28px 0; padding:14px 28px;
          background:rgba(20,22,27,.94); border-top:1px solid var(--line);
@@ -732,10 +738,14 @@ function titleBadge(p) {
   const t = p.title ? `<span class="badge ${p.title === "MVP" ? "mvp" : "svp"}">${p.title}</span>` : "";
   const kdaCls = { "秀": "kda-1", "天秀": "kda-2", "天之上": "kda-3" };
   const wing = '<svg class="wing" viewBox="0 0 20 14" aria-hidden="true"><path d="M1 13 Q7 11 12 4 Q8 11 3 13 Z"/><path d="M4 13 Q10 11 16 2 Q11 10 6 13 Z"/><path d="M8 13 Q13 10 19 1 Q14 9 10 13 Z"/></svg>';
+  const h = p.honor ? `<span class="badge kda honor">${wing}虽败犹荣${wing.replace('class="wing"', 'class="wing flip"')}</span>` : "";
   const k = p.kda_title ? `<span class="badge kda ${kdaCls[p.kda_title]}">${wing}${p.kda_title}${wing.replace('class="wing"', 'class="wing flip"')}</span>` : "";
-  const tagCls = { "僵": "tag-jiang", "硬": "tag-ying", "瘤": "tag-liu", "莽": "tag-mang" };
-  const g = (p.tags || []).map(x => `<span class="badge tag ${tagCls[x]}">${x}</span>`).join("");
-  return `<b>${p.score.toFixed(1)}</b>${t}${k}${g}`;
+  const tagCls = { "僵": "tag-jiang", "硬": "tag-ying", "瘤": "tag-liu", "莽": "tag-mang",
+    "敌塔师": "tag-tower", "光明左使": "tag-ward", "光明右使": "tag-ward", "光明使者": "tag-ward2" };
+  const g = (p.tags || []).map(x => x === "光明使者"
+    ? `<span class="badge kda tag-ward2">${wing}${x}${wing.replace('class="wing"', 'class="wing flip"')}</span>`
+    : `<span class="badge tag ${tagCls[x]}">${x}</span>`).join("");
+  return `<b>${p.score.toFixed(1)}</b>${t}${h}${k}${g}`;
 }
 
 function scoreboardTable(team, m) {
