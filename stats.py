@@ -115,171 +115,17 @@ def load_role_overrides():
         return {}
 
 
-def player_key(p):
-    """比赛内稳定标识：优先 SteamID；没有 SteamID 时退回玩家名（云端脱敏数据）。"""
-    return str(p.get("steamid") or p.get("name") or p.get("player_id") or "")
-
-
-def assign_ranks(match):
-    """返回 {player_key: (全场10人排名, 队内5人排名)}，净资产越高排名越靠前。"""
-    result = {}
-
-    ranked_all = sorted(
-        match["players"], key=lambda p: p.get("net_worth", 0), reverse=True
-    )
-    for i, p in enumerate(ranked_all):
-        result.setdefault(player_key(p), [None, None])[0] = i + 1
-
-    for team in ("radiant", "dire"):
-        members = [p for p in match["players"] if p.get("team") == team]
-        members.sort(key=lambda p: p.get("net_worth", 0), reverse=True)
-        for i, p in enumerate(members):
-            result.setdefault(player_key(p), [None, None])[1] = i + 1
-
-    return {k: tuple(v) for k, v in result.items()}
+def load_legacy_identities():
+    try:
+        with open(os.path.join(SCRIPT_DIR, "legacy_identities.json"), encoding="utf-8") as fp:
+            return json.load(fp)
+    except (OSError, ValueError):
+        return {}
 
 
 def aggregate(matches):
-    players = {}
-    aliases = load_aliases()
-    canonical_names = set(aliases.values())
-
-    for match in matches:
-        radiant_win = bool(match["radiant_win"])
-        ranks = assign_ranks(match)
-
-        for p in match["players"]:
-            sid = str(p.get("steamid", ""))
-            raw_name = p.get("name", "")
-            canonical = aliases.get(raw_name) or aliases.get(sid)
-            if not canonical and raw_name in canonical_names:
-                canonical = raw_name
-            if canonical:
-                key = "alias:" + canonical
-            else:
-                # 优先用昵称：云端脱敏数据没有 SteamID，本地原始数据有，
-                # 两种数据混在一起时不能因此把同一个人拆成两行。
-                key = raw_name or sid or "unknown"
-            row = players.setdefault(key, {
-                "steamids": [],
-                "name": canonical or raw_name,
-                "games": 0, "wins": 0, "core_games": 0,
-                "gpm": [], "xpm": [],
-                "kills": 0, "deaths": 0, "assists": 0,
-                "last_hits": [], "net_worth": [], "hero_damage": [],
-                "dmg_ratio": [], "hero_damage_taken": [], "taken_ratio": [],
-                "heroes": defaultdict(int),
-                "rank_all": [], "rank_team": [],
-            })
-            if sid and sid not in row["steamids"]:
-                row["steamids"].append(sid)
-            if raw_name and not canonical:
-                row["name"] = raw_name
-
-            row["games"] += 1
-            won = (p.get("team") == "radiant") == radiant_win
-            if won:
-                row["wins"] += 1
-
-            row["gpm"].append(p.get("gold_per_min", 0))
-            row["xpm"].append(p.get("xp_per_min", 0))
-            row["kills"] += p.get("kills", 0)
-            row["deaths"] += p.get("deaths", 0)
-            row["assists"] += p.get("assists", 0)
-            row["last_hits"].append(p.get("last_hits", 0))
-            net_worth = p.get("net_worth", 0)
-            hero_damage = p.get("hero_damage", 0)
-            hero_damage_taken = p.get("hero_damage_taken", 0)
-            row["net_worth"].append(net_worth)
-            row["hero_damage"].append(hero_damage)
-            row["dmg_ratio"].append(hero_damage / max(net_worth, 1))
-            row["hero_damage_taken"].append(hero_damage_taken)
-            row["taken_ratio"].append(hero_damage_taken / max(net_worth, 1))
-            raw_hero = (p.get("hero_name") or "").replace("CDOTA_Unit_Hero_", "")
-            hero = HERO_ZH.get(raw_hero.lower().replace("_", ""), raw_hero)
-            if hero:
-                row["heroes"][hero] += 1
-
-            pid = player_key(p)
-            if pid in ranks:
-                rank_all, rank_team = ranks[pid]
-                if rank_all:
-                    row["rank_all"].append(rank_all)
-                if rank_team:
-                    row["rank_team"].append(rank_team)
-                    if rank_team <= 3:
-                        row["core_games"] += 1
-
-    overrides = load_role_overrides()
-    result = []
-    for key, row in players.items():
-        n = row["games"]
-        avg = lambda xs: round(sum(xs) / len(xs), 1) if xs else 0.0
-        mean = lambda xs: round(sum(xs) / len(xs), 2) if xs else 0.0
-        kda = round((row["kills"] + row["assists"]) / max(row["deaths"], 1), 2)
-
-        core_rate = row["core_games"] / n if n else 0.0
-        role = "核心" if core_rate >= 0.5 else "酱油"
-
-        ov = overrides.get(row["name"])
-        if not ov:
-            for s in row["steamids"]:
-                ov = overrides.get(s)
-                if ov:
-                    break
-        if ov and ov.get("role"):
-            role = ov["role"]
-
-        mmr_val = MMR.get(row["name"])
-        if mmr_val is None:
-            for s in row["steamids"]:
-                if s in MMR:
-                    mmr_val = MMR[s]
-                    break
-        try:
-            mmr_num = int(mmr_val) if mmr_val is not None else None
-        except (TypeError, ValueError):
-            mmr_num = None
-        if mmr_num is None:
-            mmr_num = 2000  # 未登记默认 2000
-
-        result.append({
-            "玩家": row["name"],
-            "SteamID": " / ".join(row["steamids"]),
-            "场次": n,
-            "胜": row["wins"],
-            "负": n - row["wins"],
-            "胜率": f"{row['wins'] / n * 100:.1f}%",
-            "_winrate": row["wins"] / n,
-            "定位": role,
-            "核心率": f"{core_rate * 100:.0f}%",
-            "_core_rate": core_rate,
-            "全场经济平均排名": mean(row["rank_all"]),
-            "队内经济平均排名": mean(row["rank_team"]),
-            "平均GPM": avg(row["gpm"]),
-            "平均XPM": avg(row["xpm"]),
-            "KDA": kda,
-            "平均K/D/A": (f"{row['kills'] / n:.1f}/{row['deaths'] / n:.1f}"
-                          f"/{row['assists'] / n:.1f}"),
-            "场均击杀": round(row["kills"] / n, 1),
-            "场均死亡": round(row["deaths"] / n, 1),
-            "场均助攻": round(row["assists"] / n, 1),
-            "平均补刀": avg(row["last_hits"]),
-            "平均净资产(K)": round(sum(row["net_worth"]) / n / 1000, 1),
-            "造成英雄伤害(K)": round(sum(row["hero_damage"]) / n / 1000, 1),
-            "承受英雄伤害(K)": round(sum(row["hero_damage_taken"]) / n / 1000, 1),
-            "伤害/经济": round(sum(row["dmg_ratio"]) / n, 2),
-            "承伤/经济": round(sum(row["taken_ratio"]) / n, 2),
-            "MMR": mmr_num,
-            "_mmr": mmr_num,
-            "英雄池": len(row["heroes"]),
-            "常用英雄": ", ".join(
-                f"{h}({c})" for h, c in sorted(row["heroes"].items(), key=lambda x: -x[1])[:3]
-            ),
-        })
-
-    result.sort(key=lambda r: (-r["_winrate"], -r["场次"], -r["平均GPM"]))
-    return result
+    from player_data import aggregate_players
+    return aggregate_players(matches, load_aliases(), load_role_overrides(), MMR, HERO_ZH, load_legacy_identities())
 
 
 def write_csv(rows, path):
@@ -296,7 +142,10 @@ def write_csv(rows, path):
 
 
 def write_html(rows, matches, path):
-    best_gpm = max((r["平均GPM"] for r in rows), default=0)
+    def fmt(value, digits=1, suffix=""):
+        return "暂无数据" if value is None or isinstance(value, str) else ("%.*f" % (digits, value)) + suffix
+
+    best_gpm = max((r["平均GPM"] or 0 for r in rows), default=0)
     best_wr = max((r["_winrate"] for r in rows), default=0)
 
     def cls(row, key):
@@ -308,6 +157,7 @@ def write_html(rows, matches, path):
 
     body = []
     for i, r in enumerate(rows, 1):
+        r = {k: ("暂无数据" if v is None else v) for k, v in r.items()}
         role_cls = "core" if r["定位"] == "核心" else "support"
         body.append(f"""<tr>
 <td class="rank">{i}</td><td class="name">{html.escape(r['玩家'])}</td>
@@ -321,11 +171,11 @@ def write_html(rows, matches, path):
 <td>{r['KDA']}</td>
 <td>{r['场均击杀']}/{r['场均死亡']}/{r['场均助攻']}</td>
 <td>{r['平均补刀']}</td>
-<td>{r['平均净资产(K)']:.1f}K</td>
-<td>{r['造成英雄伤害(K)']:.1f}K</td>
-<td>{r['承受英雄伤害(K)']:.1f}K</td>
-<td>{r['伤害/经济']:.2f}</td>
-<td>{r['承伤/经济']:.2f}</td>
+<td>{fmt(r['平均净资产(K)'], 1, 'K')}</td>
+<td>{fmt(r['造成英雄伤害(K)'], 1, 'K')}</td>
+<td>{fmt(r['承受英雄伤害(K)'], 1, 'K')}</td>
+<td>{fmt(r['伤害/经济'], 2, '')}</td>
+<td>{fmt(r['承伤/经济'], 2, '')}</td>
 <td>{r['MMR']}</td>
 <td class="heroes">{html.escape(r['常用英雄'])}</td>
 </tr>""")
@@ -407,10 +257,11 @@ def main():
     print(header)
     print("-" * len(header))
     for r in rows:
+        r = {k: ("暂无数据" if v is None else v) for k, v in r.items()}
         print(f"{r['玩家'][:14]:<16}{r['场次']:>4}{r['胜率']:>8}{r['定位']:>6}{r['核心率']:>7}"
               f"{r['全场经济平均排名']:>8}{r['队内经济平均排名']:>8}"
               f"{r['平均GPM']:>8}{r['平均XPM']:>8}{r['KDA']:>8}{r['平均K/D/A']:>18}"
-              f"{r['伤害/经济']:>10.2f}")
+              f"{str(r['伤害/经济']):>10}")
     print(f"\n已生成:\n  {csv_path}\n  {html_path}")
     return 0
 

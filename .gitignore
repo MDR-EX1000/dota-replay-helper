@@ -18,6 +18,9 @@ player_stats.html
 # 腾讯云 API 密钥（绝不提交）
 cloudbase.secret.json
 
+# Steam Web API user key (local / server only)
+steam.secret.json
+
 # 云函数本地配置（含 DeepSeek Key，绝不提交）
 cloudbaserc.json
 cloudfunctions/**/node_modules/
@@ -45,11 +48,14 @@ cloudbase.apikey
 cloudrun_build/
 cloudrun_test/
 
-# 上传口令（可选，默认 zgnb）
+# 上传口令（必须明确配置，不提交）
 upload_code.txt
 
-# 云端解析服务的脱敏数据（运行时生成）
+# 云端解析服务的完整数据（含 SteamID，运行时生成）
 state/
 
 # 发布前临时下载云端状态
 .state_pull/
+
+# Project-local Node/npm/CloudBase CLI and install cache
+.local-tools/

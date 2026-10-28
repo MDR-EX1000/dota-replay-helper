@@ -41,7 +41,7 @@ def resolve(name, players):
     if name in players:
         return name
     key = norm(name)
-    cands = [n for n in players if key == norm(n) or key in norm(n) or norm(n) in key]
+    cands = [n for n in players if key == norm(players[n]["name"]) or key in norm(players[n]["name"]) or norm(players[n]["name"]) in key]
     return cands[0] if len(cands) == 1 else None
 
 
@@ -108,7 +108,7 @@ def main():
 
     if len(names) != 10:
         print(f"需要正好 10 个玩家，当前 {len(names)} 个。")
-        print("可用玩家:", "、".join(sorted(players)))
+        print("可用玩家:", "、".join(sorted(p["name"] for p in players.values())))
         return 1
 
     resolved, missing = [], []
@@ -117,9 +117,12 @@ def main():
         (resolved if r else missing).append(r or n)
     if missing:
         print(f"找不到: {', '.join(missing)}")
-        print("可用玩家:", "、".join(sorted(players)))
+        print("可用玩家:", "、".join(sorted(p["name"] for p in players.values())))
         return 1
 
+    if len(set(resolved)) != 10:
+        print("名单中包含重复账号，请选择 10 个不同玩家。")
+        return 1
     sel = [players[n] for n in resolved]
     cores = sum(1 for p in sel if p["role"] == "核心")
     supports = 10 - cores
@@ -181,7 +184,7 @@ def main():
 
     L.append("")
     L.append("【评分口径（可逐项复算）】")
-    L.append("  综合分 = 0.6×Elo + 0.4×表现分（Elo 已含胜负，胜率不重复计分）")
+    L.append("  综合分 = 0.4×Elo + 0.3×表现分 + 0.3×MMR分（Elo 已含胜负，胜率不重复计分）")
     L.append("  表现分 = KDA 40% + GPM 15% + XPM 15% + 伤害/经济 30%")
     L.append("  位置基准: 核心 3.7/540/720/1.59，酱油 2.4/335/490/1.40")
     L.append("  原始表现 = 1000 + 500×Σ[权重×(实际值/基准−1)]，再按场次收缩")
