@@ -172,6 +172,7 @@ def aggregate_players(matches, aliases, overrides, mmr, hero_names, legacy=None)
             "平均补刀": avg("last_hits"), "平均净资产(K)": avg("net_worth", 1000),
             "造成英雄伤害(K)": avg("hero_damage", 1000), "承受英雄伤害(K)": avg("hero_damage_taken", 1000),
             "伤害/经济": average(row["dmg_ratio"], 2), "承伤/经济": average(row["taken_ratio"], 2),
-            "MMR": mmr_value if mmr_value is not None else "-", "英雄池": len(row["heroes"]),
+            # 与 main 保持一致：未登记 MMR 显示默认 2000
+            "MMR": mmr_value if mmr_value is not None else 2000, "英雄池": len(row["heroes"]),
             "常用英雄": ", ".join("%s(%s)" % x for x in sorted(row["heroes"].items(), key=lambda x: (-x[1], x[0]))[:3])})
     return sorted(out, key=lambda r: (-r["_winrate"], -r["场次"], -(r["平均GPM"] or 0)))
