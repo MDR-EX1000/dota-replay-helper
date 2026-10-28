@@ -260,8 +260,8 @@ async function ensureUploadEndpoint() {
   }
 }
 
-async function syncStateFromCloud() {
-  if (stateSynced) return;
+async function syncStateFromCloud(force = false) {
+  if (stateSynced && !force) return;
   stateSynced = true;
   if (!(await ensureLogin())) {
     console.error('未登录，跳过云端状态同步，仅使用镜像内置数据');
@@ -425,7 +425,8 @@ async function processJob(job) {
   const upload = uploads.get(job.uploadId);
   if (!upload) throw new Error('上传任务不存在或已过期');
 
-  await syncStateFromCloud();
+  // 每次都从云端合并最新 state，避免热实例用镜像里的旧数据发布
+  await syncStateFromCloud(true);
   if (stateIncomplete) {
     throw new Error('云端比赛数据与本地不一致，已拒绝发布会话；请升级服务镜像后重试');
   }
