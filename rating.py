@@ -197,11 +197,12 @@ def apply(players, winner, objectives=None):
             best = max(ps, key=lambda p: (p["score"],
                                           (p.get("kills") or 0) + (p.get("assists") or 0)))
             best["title"] = title
-            # 虽败犹荣：SVP 的荣誉档。评分 >= 8.0（胜方顶尖水平）且 KDA >= 1.5
-            # （防短局/碾压局数据失真），输了但贡献重大才授予
-            if title == "SVP":
-                kda = (best["kills"] + best["assists"]) / max(best["deaths"], 1)
-                best["honor"] = best["score"] >= 8.0 and kda >= 1.5
+    # 虽败犹荣：败方专属，不唯一、不限于 SVP。评分 >= 8.0（胜方顶尖水平）
+    # 且 KDA >= 1.5（防短局/碾压局数据失真），输了但贡献重大即授予
+    for p in players:
+        if p["team"] == loser and p["score"] is not None:
+            kda = (p["kills"] + p["assists"]) / max(p["deaths"], 1)
+            p["honor"] = p["score"] >= 8.0 and kda >= 1.5
     for p in players:
         p.setdefault("honor", False)
     return players
