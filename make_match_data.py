@@ -8,6 +8,7 @@
 import json
 import os
 import re
+import rating
 from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -171,6 +172,8 @@ def transform_match(m):
             "abilities": abilities,
             "damage": p.get("damage"),
         })
+
+    rating.apply(players_out, "radiant" if m.get("radiant_win") else "dire")
 
     score = {
         "radiant": sum(p["kills"] for p in players_out if p["team"] == "radiant"),

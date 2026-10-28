@@ -108,6 +108,28 @@ TEMPLATE = r"""<!DOCTYPE html>
   .badge { display:inline-block; font-size:10px; padding:1px 6px; border-radius:999px; margin-left:5px; }
   .badge.core { color:#7ee0a1; background:#173125; }
   .badge.sup { color:#c8a5ff; background:#251c38; }
+  .badge.mvp { color:#1a1200; background:#ffcc33; font-weight:700; }
+  .badge.svp { color:#0a1a2a; background:#7fc4ff; font-weight:700; }
+  .award-row { display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  .award { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:10px; background:var(--panel,#1b1f2a); border:1px solid rgba(255,255,255,.08); }
+  .award-hero { color:var(--muted); font-size:12px; }
+  .award-score { font-weight:700; font-size:16px; }
+  .award.MVP .award-score { color:#ffcc33; }
+  .award.SVP .award-score { color:#7fc4ff; }
+  .badge.kda { display:inline-flex; align-items:center; gap:1px; padding:1px 4px; letter-spacing:1px; }
+  .badge.kda .wing { width:14px; height:10px; fill:currentColor; opacity:.9; }
+  .badge.kda .wing.flip { transform:scaleX(-1); }
+  .badge.kda-1 { color:#ff8a3d; background:#2a1608; border:1px solid #a34d16; font-weight:700;
+    text-shadow:0 0 6px rgba(255,138,61,.6); }
+  .badge.kda-2 { color:#ff8a3d; background:#16210c; border:1px solid #4d8a1f; font-weight:700;
+    text-shadow:0 0 7px rgba(255,138,61,.65); box-shadow:0 0 7px rgba(120,200,80,.35); }
+  .badge.kda-3 { color:#ff4d4d; background:#2e0d0d; border:1px solid #b32020; font-weight:700;
+    text-shadow:0 0 8px rgba(255,77,77,.8); box-shadow:0 0 10px rgba(255,60,60,.45); }
+  .badge.tag { font-weight:700; letter-spacing:1px; }
+  .badge.tag-jiang { color:#b8b8b8; background:#232323; border:1px solid #555; }
+  .badge.tag-ying { color:#7fd4c1; background:#0f2422; border:1px solid #2f6b5e; }
+  .badge.tag-liu { color:#a6d94a; background:#1c2608; border:1px solid #5a7a1f; }
+  .badge.tag-mang { color:#e8a05a; background:#2a1a0e; border:1px solid #7a4a1f; }
   .badge.prov { color:#ffcc66; background:#332b17; }
   .bar { position:sticky; bottom:0; margin:22px -28px 0; padding:14px 28px;
          background:rgba(20,22,27,.94); border-top:1px solid var(--line);
@@ -705,21 +727,43 @@ function renderSub(m) {
   else renderOverview(pane, m);
 }
 
+function titleBadge(p) {
+  if (p.score == null) return "";
+  const t = p.title ? `<span class="badge ${p.title === "MVP" ? "mvp" : "svp"}">${p.title}</span>` : "";
+  const kdaCls = { "秀": "kda-1", "天秀": "kda-2", "天之上": "kda-3" };
+  const wing = '<svg class="wing" viewBox="0 0 20 14" aria-hidden="true"><path d="M1 13 Q7 11 12 4 Q8 11 3 13 Z"/><path d="M4 13 Q10 11 16 2 Q11 10 6 13 Z"/><path d="M8 13 Q13 10 19 1 Q14 9 10 13 Z"/></svg>';
+  const k = p.kda_title ? `<span class="badge kda ${kdaCls[p.kda_title]}">${wing}${p.kda_title}${wing.replace('class="wing"', 'class="wing flip"')}</span>` : "";
+  const tagCls = { "僵": "tag-jiang", "硬": "tag-ying", "瘤": "tag-liu", "莽": "tag-mang" };
+  const g = (p.tags || []).map(x => `<span class="badge tag ${tagCls[x]}">${x}</span>`).join("");
+  return `<b>${p.score.toFixed(1)}</b>${t}${k}${g}`;
+}
+
 function scoreboardTable(team, m) {
   const players = m.players.filter(p => p.team === team).sort((a, b) => b.net_worth - a.net_worth);
   return `<div class="sb-head ${team === "radiant" ? "sb-radiant" : "sb-dire"}">${teamZh(team)}</div>
   <div class="table-wrap"><table class="m-table">
-    <thead><tr><th>英雄</th><th>玩家</th><th>等级</th><th>K/D/A</th><th>净资产</th><th>GPM/XPM</th><th>正/反</th><th>装备</th></tr></thead>
+    <thead><tr><th>英雄</th><th>玩家</th><th>评分</th><th>等级</th><th>K/D/A</th><th>净资产</th><th>GPM/XPM</th><th>正/反</th><th>装备</th></tr></thead>
     <tbody>${players.map(p => `<tr>
       <td class="hero-cell">${esc(p.hero_zh)}<span><br>${esc(p.hero)}</span></td>
-      <td>${esc(p.name)}</td><td>${p.level}</td><td>${p.kills}/${p.deaths}/${p.assists}</td>
+      <td>${esc(p.name)}</td><td>${titleBadge(p)}</td><td>${p.level}</td><td>${p.kills}/${p.deaths}/${p.assists}</td>
       <td>${kfmt(p.net_worth)}</td><td>${p.gpm}/${p.xpm}</td><td>${p.last_hits}/${p.denies}</td>
       <td><div class="item-chips">${p.items.map(i => `<span class="item-chip" title="${esc(i.key)}">${esc(i.zh)}</span>`).join("")}</div></td>
     </tr>`).join("")}</tbody></table></div>`;
 }
 
+function awardBanner(m) {
+  const find = (t) => m.players.filter(p => p.team === t && p.title)[0];
+  const mvp = find(m.winner), svp = find(m.winner === "radiant" ? "dire" : "radiant");
+  if (!mvp && !svp) return "";
+  const chip = (p, cls) => p ? `<div class="award ${cls}">
+      <span class="badge ${cls.toLowerCase()}">${p.title}</span>
+      <b>${esc(p.name)}</b><span class="award-hero">${esc(p.hero_zh)}</span>
+      <span class="award-score">${p.score.toFixed(1)}</span></div>` : "";
+  return `<div class="award-row">${chip(mvp, "MVP")}${chip(svp, "SVP")}</div>`;
+}
+
 function renderOverview(host, m) {
-  host.innerHTML = scoreboardTable("radiant", m) + scoreboardTable("dire", m);
+  host.innerHTML = awardBanner(m) + scoreboardTable("radiant", m) + scoreboardTable("dire", m);
 }
 
 function svgEl(tag, attrs) {
