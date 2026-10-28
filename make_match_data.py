@@ -162,6 +162,8 @@ def transform_match(m, resolver=None, profile_cache=None):
             "healing": metric(p, "hero_healing"),
             "stuns": metric(p, "stuns"),
             "wards_placed": metric(p, "observer_sentry_wards"),
+            "obs_wards": metric(p, "observer_wards_placed"),
+            "sen_wards": metric(p, "sentry_wards_placed"),
             "wards_destroyed": metric(p, "wards_destroyed"),
             "missing_fields": [key for key, source in PUBLIC_FIELDS.items() if metric(p, source) is None],
             "quality_verified": (p.get("data_quality") or {}).get("verified", False),
@@ -171,7 +173,8 @@ def transform_match(m, resolver=None, profile_cache=None):
         })
 
     if isinstance(m.get("radiant_win"), bool):
-        rating.apply(players_out, "radiant" if m["radiant_win"] else "dire")
+        rating.apply(players_out, "radiant" if m["radiant_win"] else "dire",
+                     m.get("objectives"))
     else:
         for p in players_out:
             p["score"] = None
@@ -197,6 +200,7 @@ def transform_match(m, resolver=None, profile_cache=None):
     awards["rules"].append(
         "MVP/SVP 使用 0–10 单局评分；KDA 称号（秀/天秀/天之上）与僵/硬/瘤/莽也由该评分体系给出。"
     )
+
 
     kills = []
     for k in m.get("kills") or []:
@@ -279,6 +283,8 @@ def transform_match(m, resolver=None, profile_cache=None):
                 for p in players_out
             ],
         }
+
+    rating.apply(players_out, "radiant" if m.get("radiant_win") else "dire", objectives)
 
     start = m.get("start_time", 0)
     return {
