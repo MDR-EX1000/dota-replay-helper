@@ -60,6 +60,8 @@ let jobRunning = false;
 // 参与页面生成的配置（与 deploy_tcb.py 的 CONFIG_FILES 保持一致）
 const CONFIG_FILES = [
   'aliases.json',
+  'legacy_identities.json',
+  'roles.json',
   'baselines.json',
   'mmr.json',
   'hero_names_zh.json',
@@ -293,6 +295,8 @@ async function syncStateFromCloud() {
       fs.copyFileSync(path.join(CLOUD_STATE_DIR, f), path.join(STATE_DIR, f));
       fs.copyFileSync(path.join(CLOUD_STATE_DIR, f), path.join(JSON_DIR, f));
     }
+    const remoteProfiles = path.join(CLOUD_STATE_DIR, 'steam_profiles.json');
+    if (fs.existsSync(remoteProfiles)) fs.copyFileSync(remoteProfiles, path.join(STATE_DIR, 'steam_profiles.json'));
     const remoteIndex = path.join(CLOUD_STATE_DIR, 'index.json');
     if (fs.existsSync(remoteIndex)) {
       fs.copyFileSync(remoteIndex, path.join(STATE_DIR, 'index.json'));
@@ -520,7 +524,9 @@ async function processJob(job) {
 
   stage(job, '重新生成统计与网页');
   for (const script of ['stats.py', 'make_web.py']) {
-    const r = await run(PYTHON_BIN, [path.join(ROOT, script)], { timeout: 180000 });
+    const env = script === 'make_web.py'
+      ? { STEAM_WEB_API_KEY: process.env.STEAM_WEB_API_KEY || SECRETS.steamApiKey || '' } : {};
+    const r = await run(PYTHON_BIN, [path.join(ROOT, script)], { timeout: 180000, env });
     if (r.code !== 0) {
       throw new Error(`${script} 失败: ` + (r.err || r.out).slice(-400));
     }
