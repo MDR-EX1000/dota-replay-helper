@@ -41,7 +41,8 @@ replay/
 ├── make_name_maps.py          # 中文装备/技能名映射
 ├── item_names_zh.json / item_aliases.json / item_ids.json
 ├── deploy_tcb.py              # 腾讯云静态发布（发布前自动扫描新录像）
-├── scan_new.py                # 扫描 replays 目录，解析新增练习赛
+├── scan_new.py                # 扫描 dem/ 和 Dota 客户端重放目录，解析新增练习赛
+├── check_dem.py               # 检查已解析比赛是否都有本地录像
 ├── deploy_ai.py               # 部署 AI 云函数
 ├── build_cloudrun.py          # 组装并部署上传/解析服务（云托管）
 ├── sync_cloud.py              # 把网页上传的比赛同步回本地（不发布）
@@ -62,7 +63,7 @@ replay/
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
 ├── player_stats.csv / .html   # 本地汇总表（git 忽略）
 ├── manta/                     # 上游解析库（git 忽略）
-└── 五个一键 bat
+└── 六个一键 bat
 ```
 
 | 路径 | 说明 |
@@ -76,7 +77,8 @@ replay/
 | `reparse_known.py` | 只重解析已有比赛，补齐事件/经济/装备时间线 |
 | `make_name_maps.py` | 从本地 VPK 生成中文装备/技能名 |
 | `deploy_tcb.py` | 扫描新录像 → 生成 → 上传到腾讯云 CloudBase |
-| `scan_new.py` | 扫描 `replays` 目录，解析新增练习赛并写入 `json/` |
+| `scan_new.py` | 扫描 `dem/` 和 Dota 客户端重放目录，解析新增练习赛并写入 `json/` |
+| `check_dem.py` | 检查已解析比赛是否都有本地 `.dem`，可报告并复制 D 盘可找回的录像 |
 | `deploy_ai.py` | 部署 `roll-ai` 云函数，写入 AI 端点并重新发布网页 |
 | `cloudfunctions/roll-ai/` | DeepSeek 代理：对话、工具调用、限流 |
 | `cloudbase.json` | 环境 ID、默认访问域名、`ai_endpoint` |
@@ -89,6 +91,7 @@ replay/
 | `一键发布到腾讯云.bat` | 生成网页并上传到腾讯云 CloudBase |
 | `一键部署AI.bat` | 部署云函数、配置 Key、更新 AI 端点 |
 | `一键同步.bat` | 补回网页上传的比赛到本地（不发布） |
+| `一键检查录像.bat` | 检查已解析比赛是否都有本地 `.dem` |
 
 ## 一键发布到腾讯云
 
@@ -107,7 +110,19 @@ replay/
 3. 重新生成统计和网页
 4. 上传到 CloudBase 静态托管
 
-重放目录默认是 `C:/Users/admin/Desktop/replay/dem`（唯一解析来源），可用环境变量 `DOTA_REPLAY_DIR` 覆盖。
+发布前默认扫描两个重放目录：
+
+1. `C:/Users/admin/Desktop/replay/dem`：长期维护的本地录像
+2. Dota 客户端的 `game/dota/replays`（D 盘）：自动发现客户端新下载的录像
+
+只扫描 `dem/`：`python scan_new.py --no-d`；用环境变量 `DOTA_REPLAY_DIR` 可覆盖为自定义目录（多个用 `;` 分隔）。
+
+检查录像完整性：
+
+```
+python check_dem.py            # 或双击 一键检查录像.bat
+python check_dem.py --copy-from-d   # 把 D 盘能找回的缺失录像复制到 dem/
+```
 
 前置条件：
 
@@ -216,6 +231,11 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 - 解析成功后删除云端录像分片，只保留比赛数据（`state/`，含 SteamID）
 - 失败不会写入统计，也不会发布
 
+SteamID 说明：云端 state 和镜像现在都保留 SteamID。早期以脱敏版本入库的
+`9064327315`、`9064411460` 缺少 SteamID；统计按昵称合并，结果不受影响。
+要补齐这两场，重新上传（勾选「重新解析已存在的比赛」）或把对应 `.dem` 放进
+`dem/` 后本地重新解析即可。
+
 服务端代码在 `upload_service/server.js`，镜像由云端构建：
 
 ```bash
@@ -233,7 +253,9 @@ python build_cloudrun.py --deploy   # 组装 + 提交云端构建部署
 ```bash
 python stats.py          # 汇总统计
 python make_web.py       # 生成 docs/index.html
-python scan_new.py       # 手动扫描新录像
+python scan_new.py       # 手动扫描 dem/ 和 Dota 客户端重放目录
+python scan_new.py --no-d  # 只扫描 dem/
+python check_dem.py      # 检查录像完整性
 python reparse_known.py --all-known  # 重解析已有比赛
 python make_name_maps.py # 更新中文装备/技能名
 python deploy_tcb.py     # 发布到腾讯云（会先自动扫描）
