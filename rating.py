@@ -7,8 +7,25 @@
   - schema 3 的缺失值（None）不参与计算，缺数据的选手不评 MVP/SVP 与标签
 """
 
-# 净资产排名(0=最高) -> 核心度 1..0
-CORE_W = [1.0, 0.9, 0.7, 0.3, 0.0]
+# 位置基线：各位置(净资产排名 1..5 号位)在大众对局中占本队总量的典型份额。
+# 这是 MOBA 通用经验假设值，不取自本项目对局，每项五个位置之和为 1.0。
+BASE = {
+    "dmg":   (0.29, 0.26, 0.20, 0.14, 0.11),
+    "part":  (0.20, 0.22, 0.20, 0.19, 0.19),
+    "eco":   (0.28, 0.25, 0.21, 0.15, 0.11),
+    "tower": (0.32, 0.24, 0.24, 0.12, 0.08),
+    "tank":  (0.14, 0.22, 0.30, 0.20, 0.14),
+    "stun":  (0.08, 0.15, 0.17, 0.30, 0.30),
+    "heal":  (0.05, 0.05, 0.10, 0.35, 0.45),
+    "ward":  (0.04, 0.06, 0.10, 0.35, 0.45),
+    "death": (0.16, 0.20, 0.22, 0.21, 0.21),
+}
+# 权重和为 1.0；存活并入统一尺度，不再有游离的 KDA 加成/死亡扣分
+W = {"dmg": 0.22, "part": 0.22, "eco": 0.08, "tower": 0.06,
+     "tank": 0.08, "util": 0.14, "live": 0.20}
+BASE_FLOOR = 0.08   # 基线下限，防止低基线项(核心的眼/治疗)比值被放大
+RATIO_CAP = 2.0     # 单项相对基线的比值上限
+SCALE = 3.5         # 斜率：原始分每偏离典型水平 0.1 = 0.875 分
 
 # 评分/标签依赖的字段；任一缺失就不对该选手评分
 FIELDS = (
@@ -26,6 +43,13 @@ def _share(v, total):
     return 5.0 * v / total if total > 0 else 1.0
 
 
+def _ratio(v, total, base):
+    """本人占队份额 / 本位置典型份额，封顶；队内该项为 0 时记为典型水平。"""
+    if total <= 0:
+        return 1.0
+    return min((v / total) / max(base, BASE_FLOOR), RATIO_CAP)
+
+
 def rate_players(players, winner):
     out = {}
     for team in ("radiant", "dire"):
@@ -34,45 +58,28 @@ def rate_players(players, winner):
         if not ps:
             continue
         T = lambda k: sum(p[k] for p in ps)
-        tk, td = T("kills"), T("deaths")
         for i, p in enumerate(ps):
-            core = CORE_W[i] if i < 5 else 0.0
-            sup = 1 - core
-            dmg = _share(p["hero_damage"], T("hero_damage"))
-            part = _share(p["kills"] + 0.7 * p["assists"],
-                          tk + 0.7 * T("assists"))
-            eco = _share(p["net_worth"], T("net_worth"))
-            tower = min(_share(p["tower_damage"], T("tower_damage")), 3.0)
-            tank = min(_share(p["hero_damage_taken"], T("hero_damage_taken")), 2.5)
-            util = (_share(p["stuns"], T("stuns")) * 0.4
-                    + _share(p["healing"], T("healing")) * 0.3
-                    + _share(p["wards_placed"] + p["wards_destroyed"],
-                             T("wards_placed") + T("wards_destroyed")) * 0.3)
-            death = min(_share(p["deaths"], td), 2.5) if td else 1.0
-            # 零死亡额外奖励有限；死亡多于均值才重罚；份额封顶 2.5 倍，
-            # 避免低死亡局里唯一一次死亡被无限放大
-            death_pen = 0.30 * death if death <= 1 else 0.30 + 0.35 * (death - 1)
-            kda = (p["kills"] + p["assists"]) / max(p["deaths"], 1)
-            kda_bonus = min(kda, 12) / 12 * 0.5
-
-            raw = (0.26 * dmg + 0.24 * part
-                   + 0.10 * eco
-                   + 0.07 * tower
-                   + 0.08 * tank
-                   + 0.14 * util
-                   + kda_bonus - death_pen)
-            out[p["pid"]] = raw
-    # 线性映射到 0-10：raw≈0.9 为 6 分
-    res = {}
-    for p in players:
-        if p["pid"] not in out:
-            continue
-        r = out[p["pid"]]
-        s = 6.0 + (r - 0.9) * 5.0
-        if p["team"] == winner:
-            s += 0.3
-        res[p["pid"]] = round(max(0.0, min(10.0, s)), 1)
-    return res
+            i = min(i, 4)
+            r = lambda key, v, tot: _ratio(v, tot, BASE[key][i])
+            dmg = r("dmg", p["hero_damage"], T("hero_damage"))
+            part = r("part", p["kills"] + 0.7 * p["assists"],
+                     T("kills") + 0.7 * T("assists"))
+            eco = r("eco", p["net_worth"], T("net_worth"))
+            tower = r("tower", p["tower_damage"], T("tower_damage"))
+            tank = r("tank", p["hero_damage_taken"], T("hero_damage_taken"))
+            util = (0.4 * r("stun", p["stuns"], T("stuns"))
+                    + 0.3 * r("heal", p["healing"], T("healing"))
+                    + 0.3 * r("ward", p["wards_placed"] + p["wards_destroyed"],
+                              T("wards_placed") + T("wards_destroyed")))
+            # 存活：死亡比典型越少越好，0 死=2.0，典型=1.0，两倍典型=0
+            live = 2.0 - r("death", p["deaths"], T("deaths")) if T("deaths") else 1.0
+            out[p["pid"]] = (W["dmg"] * dmg + W["part"] * part + W["eco"] * eco
+                             + W["tower"] * tower + W["tank"] * tank
+                             + W["util"] * util + W["live"] * live)
+    # 各项均为“相对本位置典型水平”的比值，全项典型 -> raw=1.0 -> 6 分
+    # 胜负不参与评分：胜负已体现在 MVP(胜方)/SVP(败方)的归属上
+    return {pid: round(max(0.0, min(10.0, 6.0 + (v - 1.0) * SCALE * 2.5)), 1)
+            for pid, v in out.items()}
 
 
 def apply(players, winner, objectives=None):
@@ -90,17 +97,18 @@ def apply(players, winner, objectives=None):
         if p["pid"] in scores:
             p["score"] = scores[p["pid"]]
 
-    # KDA 称号：天之上 > 天秀 > 秀，互斥；缺字段不评
+    # 秀系列（K/D 指标，只看击杀/死亡，不含助攻）：
+    # 天之上 > 天秀 > 秀，互斥；缺字段不评
     for p in players:
-        kills, deaths, assists = p.get("kills"), p.get("deaths"), p.get("assists")
-        if None in (kills, deaths, assists):
+        kills, deaths = p.get("kills"), p.get("deaths")
+        if None in (kills, deaths):
             continue
-        kda = (kills + assists) / max(deaths, 1)
-        if kda >= 15 and deaths == 0:
+        kd = kills / max(deaths, 1)
+        if kd >= 15 and deaths == 0:
             p["kda_title"] = "天之上"
-        elif kda >= 15:
+        elif kd >= 15:
             p["kda_title"] = "天秀"
-        elif kda >= 10:
+        elif kd >= 10:
             p["kda_title"] = "秀"
 
     # 负面/特色称号：不互斥，一人可同时拿多个；但每个称号每场最多一人，
