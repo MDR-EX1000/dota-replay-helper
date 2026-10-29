@@ -188,7 +188,7 @@ def transform_match(m, resolver=None, profile_cache=None):
         r for r in awards.get("rules", []) if "MVP" not in r and "英魂" not in r
     ]
     awards["rules"].append(
-        "MVP/SVP 使用 0–10 单局评分；败方高分可获虽败犹荣；KDA、敌塔师、光明系列及僵/硬/瘤/莽按单场指标授予。"
+        "MVP/SVP 使用 0–10 单局评分；败方高分可获虽败犹荣；KDA、敌塔师、光明系列及僵/硬/瘤/莽/搞子/躺了按单场指标授予。"
     )
 
 
