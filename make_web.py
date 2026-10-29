@@ -134,22 +134,30 @@ TEMPLATE = r"""<!DOCTYPE html>
   .award-score { font-weight:700; font-size:16px; }
   .award.MVP .award-score { color:#ffcc33; }
   .award.SVP .award-score { color:#7fc4ff; }
-  .badge.kda { display:inline-flex; align-items:center; gap:1px; padding:1px 4px; letter-spacing:1px; }
-  .badge.kda .wing { width:14px; height:10px; fill:currentColor; opacity:.9; }
+  .badge.kda { display:inline-flex; align-items:center; gap:2px; padding:1px 5px; letter-spacing:1px; }
+  .badge.kda .wing { width:18px; height:13px; fill:currentColor; opacity:.9; }
   .badge.kda .wing.flip { transform:scaleX(-1); }
-  .badge.kda-1 { color:#ff8a3d; background:#2a1608; border:1px solid #a34d16; font-weight:700;
-    text-shadow:0 0 6px rgba(255,138,61,.6); }
-  .badge.kda-2 { color:#ff8a3d; background:#16210c; border:1px solid #4d8a1f; font-weight:700;
-    text-shadow:0 0 7px rgba(255,138,61,.65); box-shadow:0 0 7px rgba(120,200,80,.35); }
-  .badge.kda-3 { color:#ff4d4d; background:#2e0d0d; border:1px solid #b32020; font-weight:700;
-    text-shadow:0 0 8px rgba(255,77,77,.8); box-shadow:0 0 10px rgba(255,60,60,.45); }
+  .badge.kda .orn { height:13px; width:auto; }
+  /* 暗黑3 传奇橙 #ff8000；太古传奇红 #ff3b2a */
+  .badge.kda-1 { color:#ff8000; background:#2a1500; border:1px solid #a35200; font-weight:700;
+    text-shadow:0 0 6px rgba(255,128,0,.55); }
+  .badge.kda-2 { color:#ff8000; background:#2a1500; border:1px solid #c26000; font-weight:700;
+    text-shadow:0 0 7px rgba(255,128,0,.65); box-shadow:0 0 8px rgba(255,128,0,.35); }
+  .badge.kda-3 { color:#ff3b2a; background:#2e0a07; border:1px solid #d02414; font-weight:700;
+    text-shadow:0 0 9px rgba(255,59,42,.9); box-shadow:0 0 13px rgba(255,50,30,.6); }
+  .badge.kda-3 .wing { width:23px; height:16.5px; opacity:1; filter:drop-shadow(0 0 3px rgba(255,59,42,.85)); }
   .badge.tag { font-weight:700; letter-spacing:1px; }
   .badge.tag-jiang { color:#b8b8b8; background:#232323; border:1px solid #555; }
   .badge.tag-ying { color:#7fd4c1; background:#0f2422; border:1px solid #2f6b5e; }
   .badge.tag-liu { color:#a6d94a; background:#1c2608; border:1px solid #5a7a1f; }
+  .badge.tag-gao { color:#d98aa8; background:#2a1018; border:1px solid #7a2f4c; }
+  .badge.tag-tang { color:#9fb4d6; background:#141c2a; border:1px solid #3d5278; }
   .badge.tag-mang { color:#e8a05a; background:#2a1a0e; border:1px solid #7a4a1f; }
-  .badge.honor { color:#8bd448; background:#14210a; border:1px solid #4a7a1f; font-weight:700;
-    text-shadow:0 0 7px rgba(139,212,72,.65); box-shadow:0 0 8px rgba(139,212,72,.3); }
+  /* 暗黑3 套装绿 #00C400（网易暗黑百科颜色模板，社区参考值） */
+  .badge.honor { color:#00c400; background:#041a04; border:1px solid #0a8a0a; font-weight:700;
+    text-shadow:0 0 7px rgba(0,196,0,.6); box-shadow:0 0 9px rgba(0,196,0,.35); }
+  .badge.kda.honor .orn { height:13px; }
+  .badge.kda.honor .orn.flip { transform:scaleX(-1); }
   .badge.tag-tower { color:#e8c37a; background:#2a1f0e; border:1px solid #8a6a2f; }
   .badge.tag-ward { color:#ffe98a; background:#26240c; border:1px solid #8a8330; }
   .badge.tag-ward2 { color:#ffe98a; background:#26240c; border:1px solid #b8ad3a; font-weight:700;
@@ -804,13 +812,18 @@ function titleBadge(p) {
   if (p.score == null) return "";
   const t = p.title ? `<span class="badge ${p.title === "MVP" ? "mvp" : "svp"}">${p.title}</span>` : "";
   const kdaCls = { "秀": "kda-1", "天秀": "kda-2", "天之上": "kda-3" };
-  const wing = '<svg class="wing" viewBox="0 0 20 14" aria-hidden="true"><path d="M1 13 Q7 11 12 4 Q8 11 3 13 Z"/><path d="M4 13 Q10 11 16 2 Q11 10 6 13 Z"/><path d="M8 13 Q13 10 19 1 Q14 9 10 13 Z"/></svg>';
-  const h = p.honor ? `<span class="badge kda honor">${wing}虽败犹荣${wing.replace('class="wing"', 'class="wing flip"')}</span>` : "";
-  const k = p.kda_title ? `<span class="badge kda ${kdaCls[p.kda_title]}">${wing}${p.kda_title}${wing.replace('class="wing"', 'class="wing flip"')}</span>` : "";
-  const tagCls = { "僵": "tag-jiang", "硬": "tag-ying", "瘤": "tag-liu", "莽": "tag-mang",
+  const wing = '<svg class="wing" viewBox="0 0 22 16" aria-hidden="true"><path d="M21 14 C17 14 12 12 8 7 C6 5 4 3 1 2 C5 1 9 2 12 5 C14 7 16 10 21 12 Z"/><path d="M21 15 C18 15 14 15 10 12 C8 10 5 9 2 9 C6 7 10 8 13 10 C15 12 18 13 21 13 Z" opacity=".85"/><path d="M21 13 C18 12 15 9 13 5 C12 3 11 1 10 0 C13 1 16 3 17 6 C18 8 19 10 21 11 Z" opacity=".95"/></svg>';
+  const flip = w => w.replace('class="wing"', 'class="wing flip"');
+  const eye = '<svg class="orn" viewBox="0 0 20 14" aria-hidden="true"><path d="M1 7 Q10 -2 19 7 Q10 16 1 7 Z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="7" r="3.2" fill="currentColor"/><circle cx="11" cy="6" r="1" fill="#fff" opacity=".8"/></svg>';
+  const laurel = '<svg class="orn" viewBox="0 0 16 20" aria-hidden="true"><path d="M12 19 C5 17 3 9 6 1" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><g fill="currentColor"><path d="M5.2 14.5 C2 14 1 11.5 1.2 9.5 C4 9.8 5.5 11.8 5.2 14.5Z"/><path d="M4.4 9.2 C1.5 8.2 1 5.5 1.6 3.8 C4 4.6 5.2 6.5 4.4 9.2Z"/><path d="M9 15 C11.5 12.5 13.5 12.2 14.8 12.8 C14.2 15 12 16 9 15Z"/><path d="M7.4 9.4 C9.6 7 11.5 6.6 12.8 7.2 C12.2 9.3 10.2 10.2 7.4 9.4Z"/><path d="M6.2 4 C7.6 2.2 9 1.8 10 2.2 C9.6 3.8 8.2 4.6 6.2 4Z"/></g></svg>';
+  const h = p.honor ? `<span class="badge kda honor">${laurel}虽败犹荣${laurel.replace('class="orn"', 'class="orn flip"')}</span>` : "";
+  const k = p.kda_title ? (p.kda_title === "秀"
+    ? `<span class="badge kda ${kdaCls[p.kda_title]}">秀</span>`
+    : `<span class="badge kda ${kdaCls[p.kda_title]}">${wing}${p.kda_title}${flip(wing)}</span>`) : "";
+  const tagCls = { "僵": "tag-jiang", "硬": "tag-ying", "瘤": "tag-liu", "莽": "tag-mang", "搞子": "tag-gao", "躺了": "tag-tang",
     "敌塔师": "tag-tower", "光明左使": "tag-ward", "光明右使": "tag-ward", "光明使者": "tag-ward2" };
   const g = (p.tags || []).map(x => x === "光明使者"
-    ? `<span class="badge kda tag-ward2">${wing}${x}${wing.replace('class="wing"', 'class="wing flip"')}</span>`
+    ? `<span class="badge kda tag-ward2">${eye}${x}${eye}</span>`
     : `<span class="badge tag ${tagCls[x]}">${x}</span>`).join("");
   return `<b>${p.score.toFixed(1)}</b>${t}${h}${k}${g}`;
 }

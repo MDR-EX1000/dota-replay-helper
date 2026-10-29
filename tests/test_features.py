@@ -172,8 +172,15 @@ class Features(unittest.TestCase):
             for key in ("kills", "deaths", "assists", "hero_damage", "tower_damage", "stuns", "hero_healing", "observer_sentry_wards", "wards_destroyed"):
                 p[key] = 1
         public = make_match_data.transform_match(m)
-        self.assertEqual([p["pid"] for p in public["players"] if p["title"] == "MVP"], [0])
-        self.assertEqual([p["pid"] for p in public["players"] if p["title"] == "SVP"], [5])
+        # 评分按核心/辅助两套基线，数据全相同时同定位分数相同、不同定位可能不同；
+        # 这里验证：同分并列时依次比 KDA、击杀+助攻，仍并列取最小 pid，结果可复现
+        for team, title in (("radiant", "MVP"), ("dire", "SVP")):
+            ps = [p for p in public["players"] if p["team"] == team]
+            top = max(p["score"] for p in ps)
+            tied = [p for p in ps if p["score"] == top]
+            expect = max(tied, key=lambda p: ((p["kills"] + p["assists"]) / max(p["deaths"], 1),
+                                              p["kills"] + p["assists"], -p["pid"]))["pid"]
+            self.assertEqual([p["pid"] for p in ps if p["title"] == title], [expect])
 
     def test_summon_tower_attribution_and_creep_exclusion(self):
         m = match()
