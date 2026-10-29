@@ -1,11 +1,15 @@
 @echo off
 setlocal
 set "TOOLROOT=%~dp0.local-tools"
-if not exist "%TOOLROOT%\node.exe" goto missing
-if not exist "%TOOLROOT%\cli\node_modules\.bin\tcb.cmd" goto missing
+if not exist "%TOOLROOT%\node.exe" goto fallback
+if not exist "%TOOLROOT%\cli\node_modules\.bin\tcb.cmd" goto fallback
 set "PATH=%TOOLROOT%;%PATH%"
 call "%TOOLROOT%\cli\node_modules\.bin\tcb.cmd" %*
 exit /b %errorlevel%
+:fallback
+if not exist "%APPDATA%\npm\tcb.cmd" goto missing
+call "%APPDATA%\npm\tcb.cmd" %*
+exit /b %errorlevel%
 :missing
-echo Local CloudBase CLI is not ready. Run: python tools\setup_local_tools.py
+echo CloudBase CLI not found. Install with: npm i -g @cloudbase/cli
 exit /b 1

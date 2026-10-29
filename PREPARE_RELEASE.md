@@ -8,7 +8,7 @@
 
 下文“已完成”记录的是开发机验收状态。新克隆的仓库不包含录像、原始比赛 JSON、Steam Key、头像缓存、解析器二进制、manta 源码或 `.local-tools/`。请按 README 准备解析器和依赖，按需运行工具安装脚本，并在本机配置自己的密钥。空的私有配置文件也不会随 Git 交付。
 
-无需私有数据即可运行逻辑测试：`python -B -m unittest discover -s tests -v` 和 `node --test tests/player_profiles.test.cjs`（需安装 Python 和 Node）。两场录像预览及 `一键本地验收.bat` 还要求开发机所用的私有样例数据与工具就位；其他环境可用自己的解析结果替换 `--matches-dir` 路径。
+无需私有数据即可运行逻辑测试：`python -B -m unittest discover -s tests -v` 和 `node --test tests/player_profiles.test.cjs`（需安装 Python 和 Node）。两场录像预览还要求开发机所用的私有样例数据与工具就位；其他环境可用自己的解析结果替换 `--matches-dir` 路径。
 
 ## 已完成的本机准备
 
@@ -27,11 +27,11 @@ python tools/setup_local_tools.py
 .\npm.cmd --version
 ```
 
-项目的发布、同步和构建脚本会优先使用项目内 CLI。普通 PowerShell 中直接调用时用 `./tcb.cmd`，不依赖全局 `tcb` 命令。
+项目的发布、同步和构建脚本会优先使用项目内 CLI，未安装时自动回退全局。PowerShell 中可直接使用 `./tcb.cmd` / `./npm.cmd`。
 
 ## 现在可以运行的检查
 
-双击 `一键发布预检.bat`，或执行：
+执行：
 
 ```powershell
 python -B release_preflight.py --local-only
@@ -41,7 +41,7 @@ python -B release_preflight.py --local-only
 
 报告写入 `cloudrun_test/release_readiness.json`，只记录状态和比赛文件信息，不记录 Key 或上传口令。检查通过只能说明本地前提满足，不能代替云端权限验证及线上最新数据核验。
 
-双击 `一键本地验收.bat` 可连续运行本机检查、Python/前端测试，并重建两场样例预览。该入口仅在当前进程中加入项目内 Node 路径，不改系统设置，也不请求 Steam 头像接口。
+可依次运行本机检查、Python/前端测试，并重建两场样例预览。这些检查不会修改系统设置，也不会请求 Steam 头像接口。
 
 ## 请朋友提供
 

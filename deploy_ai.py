@@ -16,6 +16,8 @@ import shutil
 import subprocess
 import sys
 
+from local_tools import find_tcb
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(ROOT, "cloudbase.json")
 BASERC = os.path.join(ROOT, "cloudbaserc.json")
@@ -37,7 +39,7 @@ def load_key():
 
 
 def tcb_cmd():
-    return shutil.which("tcb")
+    return find_tcb()
 
 
 def run(cmd, input_text=None):

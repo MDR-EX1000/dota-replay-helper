@@ -1,4 +1,5 @@
 """Resolve project-local deployment tools without changing the user's PATH."""
+import os
 from pathlib import Path
 import shutil
 
@@ -15,4 +16,11 @@ def find_tcb():
     # An uninstalled local wrapper is not an available CLI.
     if candidate and Path(candidate).resolve() != local.resolve():
         return candidate
+    # Windows: fall back to the global npm shim explicitly.
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        for name in ("tcb.cmd", "tcb.CMD"):
+            path = Path(appdata) / "npm" / name
+            if path.is_file():
+                return str(path)
     return None

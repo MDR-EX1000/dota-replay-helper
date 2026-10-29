@@ -5,9 +5,9 @@
 
 已加入玩家个人资料、账号身份修正、缺失数据处理、单场称号和 Steam 头像。完整变更、数据口径和验收方式见 [本轮改动说明](CHANGELOG.md)。当前版本为 v0.1.1。
 
-本机工具已准备为项目内安装；交接内容、只读预检和正式发布前的顺序见 [发布准备与交接](PREPARE_RELEASE.md)。可双击 `一键发布预检.bat` 查看就绪状态，该入口不会登录或发布。
+本机工具支持项目内安装，未安装时自动回退全局 tcb/npm；交接内容、只读预检和正式发布前的顺序见 [发布准备与交接](PREPARE_RELEASE.md)。运行 `python release_preflight.py --local-only` 可查看就绪状态，不会登录或发布。
 
-也可双击 `一键本地验收.bat` 运行测试并生成两场样例预览，不依赖全局 npm/tcb，不会连接腾讯云或刷新 Steam 头像。
+也可运行 `python -B -m unittest discover -s tests` 和 `node --test tests/player_profiles.test.cjs` 跑测试，不会连接腾讯云或刷新 Steam 头像。
 
 ## 数据流
 
@@ -50,7 +50,7 @@ replay/
 ├── legacy_identities.json     # 人工确认旧昵称对应的账号
 ├── CHANGELOG.md / tests/      # 本轮变更说明与回归测试
 ├── PREPARE_RELEASE.md / release_preflight.py  # 交接清单与离线发布预检
-├── tcb.cmd / npm.cmd / tools/ # 项目内工具入口与安装脚本
+├── tcb.cmd / npm.cmd / tools/ # 项目内工具入口（未安装时回退全局）
 ├── reparse_known.py           # 安全重解析已有比赛
 ├── make_name_maps.py          # 中文装备/技能名映射
 ├── item_names_zh.json / item_aliases.json / item_ids.json
