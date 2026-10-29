@@ -119,6 +119,27 @@ class Features(unittest.TestCase):
         self.assertEqual(next(p for p in public["players"] if p["title"] == "MVP")["team"], "radiant")
         self.assertEqual(next(p for p in public["players"] if p["title"] == "SVP")["team"], "dire")
 
+    def test_unknown_result_has_no_score_or_honor(self):
+        m = match()
+        m["radiant_win"] = None
+        public = make_match_data.transform_match(m)
+        self.assertIsNone(public["winner"])
+        self.assertTrue(all(p["score"] is None for p in public["players"]))
+        self.assertFalse(any(p.get("honor") for p in public["players"]))
+
+    def test_tower_and_combined_ward_titles(self):
+        m = match()
+        for p in m["players"]:
+            p["observer_wards_placed"] = 0
+            p["sentry_wards_placed"] = 0
+        m["players"][0].update(tower_damage=9000, observer_wards_placed=16,
+                               sentry_wards_placed=2, wards_destroyed=12)
+        m["objectives"] = [dict(kind="tower", killer="hero0", team="radiant")
+                           for _ in range(3)]
+        public = make_match_data.transform_match(m)
+        self.assertIn("敌塔师", public["players"][0]["tags"])
+        self.assertIn("光明使者", public["players"][0]["tags"])
+
     def test_missing_metric_excludes_player_from_rating_but_keeps_others(self):
         m = match()
         del m["players"][0]["hero_damage"]
