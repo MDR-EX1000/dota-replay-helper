@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dota 2 对黑数据统计</title>
-<link rel="stylesheet" href="player_profiles.css?v=1793237918">
+<link rel="stylesheet" href="player_profiles.css?v=1793363772">
 <style>
   :root {
     color-scheme: dark;
@@ -46,6 +46,9 @@
   .tab { white-space:nowrap; }
   .p-rating { font-size:18px; font-weight:700; }
   .badge { display:inline-block; font-size:10px; padding:1px 6px; border-radius:999px; margin-left:5px; }
+  /* 评分/称号行：所有徽章同一高度、同一对齐线（inline-block 与 inline-flex 基线算法不同，统一用 inline-flex + 居中） */
+  .badge.mvp, .badge.svp, .badge.tag, .badge.kda { display:inline-flex; align-items:center; justify-content:center;
+    box-sizing:border-box; height:20px; line-height:1; vertical-align:middle; }
   .badge.core { color:#7ee0a1; background:#173125; }
   .badge.sup { color:#c8a5ff; background:#251c38; }
   .badge.mvp { color:#1a1200; background:#ffcc33; font-weight:700; }
@@ -67,7 +70,7 @@
     text-shadow:0 0 7px rgba(255,128,0,.65); box-shadow:0 0 8px rgba(255,128,0,.35); }
   .badge.kda-3 { color:#ff3b2a; background:#2e0a07; border:1px solid #d02414; font-weight:700;
     text-shadow:0 0 9px rgba(255,59,42,.9); box-shadow:0 0 13px rgba(255,50,30,.6); }
-  .badge.kda-3 .wing { width:23px; height:16.5px; opacity:1; filter:drop-shadow(0 0 3px rgba(255,59,42,.85)); }
+  .badge.kda-3 .wing { width:23px; height:16.5px; margin:-3px 0; opacity:1; filter:drop-shadow(0 0 3px rgba(255,59,42,.85)); }
   .badge.tag { font-weight:700; letter-spacing:1px; }
   .badge.tag-jiang { color:#b8b8b8; background:#232323; border:1px solid #555; }
   .badge.tag-ying { color:#7fd4c1; background:#0f2422; border:1px solid #2f6b5e; }
@@ -125,6 +128,7 @@
   .audit-row { display:flex; justify-content:space-between; font-size:11.5px; padding:3px 0; color:var(--muted); }
   .audit-row .ok { color:var(--accent); }
   .audit-row .no { color:var(--bad); }
+  .audit-row .warn { color:#e0b24a; }
   .why { margin-top:10px; font-size:11.5px; color:var(--muted); line-height:1.7; }
   .empty { color:var(--muted); font-size:13px; padding:18px 0; }
   .rules-box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
@@ -163,7 +167,9 @@
   .scoreboard { margin-top:10px; }
   .scoreboard .m-table { min-width:1060px; }
   .scoreboard .item-chips { min-width:160px; max-width:220px; }
-  .title-cell { white-space:normal !important; min-width:132px; }
+  .title-cell { white-space:normal !important; min-width:132px; line-height:24px; }
+  .title-cell > b { display:inline-block; vertical-align:middle; margin-right:2px; }
+  .title-cell .badge { margin-top:2px; margin-bottom:2px; }
   .title-badge { display:inline-block; padding:3px 7px; margin:2px; border:1px solid #42655a; border-radius:5px; background:#203b30; color:#9ae3b7; font-size:12px; cursor:pointer; }
   .title-badge:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .title-mvp { background:#43351b; border-color:#8a6930; color:#ffe09c; font-weight:700; }
@@ -322,7 +328,7 @@
 <body>
 <header>
   <h1>Dota 2 对黑数据统计</h1>
-  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-30 20:30</div>
+  <div class="sub">共 <b id="matchCount"></b> 场比赛 · 数据更新于 2026-10-30 20:37</div>
 </header>
 
 <nav class="tabs">
@@ -465,6 +471,7 @@
       <tr><td>R3 均分差</td><td>两队综合均分差 ≤ 10</td><td>强度接近</td></tr>
       <tr><td>R4 预测胜率</td><td>45% – 55%</td><td>按 Elo 公式计算</td></tr>
       <tr><td>R5 不堆叠</td><td>综合分前 2 名不同队</td><td>避免双强同队</td></tr>
+      <tr><td>R6 后 2 名分开</td><td>综合分最低的 2 名不同队</td><td><b>不严格规则</b>：优先满足；满足的方案不足时用其他合格方案补齐，审计记 WARN，不会因此 roll 失败</td></tr>
     </table>
     <p>若没有方案同时满足 R1–R5，按固定顺序放宽并在结果中注明：<br>
        1. 放宽 R5 → 2. 把 R3 放宽到 15 → 3. 把 R4 放宽到 40%–60%。</p>
@@ -475,9 +482,9 @@
     <ol>
       <li><b>结构约束</b>：只保留两队核心数差 ≤1 的分法，按实际名单尽量均衡。</li>
       <li><b>强度硬约束</b>：均分差和预测胜率必须在线内，不达标不进池。</li>
-      <li><b>随机只在合格池内</b>：池内方案胜率几乎相同，抽中哪套对胜负影响可忽略。</li>
-      <li><b>规则审计</b>：每套结果都会列出 R2–R5 的实际值和 PASS/FAIL，现场可核对。</li>
-      <li><b>可复现</b>：网页每次 roll 的方案、池子、时间都可见；脚本版还会记录随机种子并落盘。</li>
+      <li><b>不抽签、直接排序</b>：合格方案按平衡分从高到低排序，展示前 3 套；优先满足 R6，不足时用平衡分最高的非 R6 方案依次补上。</li>
+      <li><b>规则审计</b>：每套结果都会列出 R1–R6 的实际值和 PASS / WARN / FAIL，现场可核对。</li>
+      <li><b>可复现</b>：同一名单每次得到相同的结果（不抽签）；网页版每次 roll 的方案、合格数量都可见。</li>
     </ol>
   </div>
 
@@ -490,8 +497,8 @@
   </div>
 </section>
 
-<script src="data/matches.js?v=1793363456"></script>
-<script src="player_profiles.js?v=1793237918"></script>
+<script src="data/matches.js?v=1793363860"></script>
+<script src="player_profiles.js?v=1793363772"></script>
 <script>
 const PLAYERS = [{"id":"p_d308c67bdc41471a34b5ece2","identity_status":"verified","avatar":"https://avatars.steamstatic.com/cb53533b0969bdb681df22a7808968681517f00d_full.jpg","samples":{"kills":17,"deaths":17,"assists":17,"net_worth":17,"gold_per_min":17,"xp_per_min":17,"last_hits":17,"denies":17,"hero_damage":17,"hero_damage_taken":17,"tower_damage":17,"hero_healing":17,"stuns":17,"observer_sentry_wards":17,"wards_destroyed":17,"level":17,"kda":17,"dmg_gold":17,"role":17,"results":17},"name":"young zhu","rating":1079.3,"elo":1104.2,"perf":1075.4,"role":"核心","provisional":false,"games":17,"wins":12,"losses":5,"winRate":70.58823529411765,"coreRate":"100%","rankAll":2.47,"rankTeam":1.76,"kda":5.11,"kd":"11.5/4.9/13.8","gpm":612.2,"xpm":871.3,"nwK":23.6,"dmgK":36.8,"dmgTakenK":25.9,"dmgGold":1.54,"takenGold":1.16,"mmr":4500,"mmrNum":4500,"heroes":"痛苦女王(3), 殁境神蚀者(2), 力丸(1)"},{"id":"p_f5dca1619a92bbb5e45216a7","identity_status":"verified","avatar":"https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg","samples":{"kills":20,"deaths":20,"assists":20,"net_worth":20,"gold_per_min":20,"xp_per_min":20,"last_hits":20,"denies":20,"hero_damage":20,"hero_damage_taken":20,"tower_damage":20,"hero_healing":20,"stuns":20,"observer_sentry_wards":20,"wards_destroyed":20,"level":20,"kda":20,"dmg_gold":20,"role":20,"results":20},"name":"木小可","rating":1049.8,"elo":1108.3,"perf":1055.0,"role":"酱油","provisional":false,"games":20,"wins":14,"losses":6,"winRate":70.0,"coreRate":"20%","rankAll":7.5,"rankTeam":4.25,"kda":3.27,"kd":"4.5/6.6/17.0","gpm":336.4,"xpm":537.1,"nwK":12.3,"dmgK":16.1,"dmgTakenK":21.7,"dmgGold":1.3,"takenGold":1.82,"mmr":2000,"mmrNum":2000,"heroes":"斯拉达(2), 祸乱之源(2), 钢背兽(2)"},{"id":"p_2f1f6ab3c7b63f6f330b49cc","identity_status":"verified","avatar":"https://avatars.steamstatic.com/7121a3db06a4e853239fd79b09a8b7d7c70c1830_full.jpg","samples":{"kills":19,"deaths":19,"assists":19,"net_worth":19,"gold_per_min":19,"xp_per_min":19,"last_hits":19,"denies":19,"hero_damage":19,"hero_damage_taken":19,"tower_damage":19,"hero_healing":19,"stuns":19,"observer_sentry_wards":19,"wards_destroyed":19,"level":19,"kda":19,"dmg_gold":19,"role":19,"results":19},"name":"假赛王，拱手让冠军","rating":1047.0,"elo":1067.8,"perf":1032.8,"role":"核心","provisional":false,"games":19,"wins":12,"losses":7,"winRate":63.1578947368421,"coreRate":"95%","rankAll":2.84,"rankTeam":1.79,"kda":4.13,"kd":"10.8/5.6/12.2","gpm":642.2,"xpm":890.7,"nwK":24.4,"dmgK":35.3,"dmgTakenK":29.2,"dmgGold":1.44,"takenGold":1.22,"mmr":4000,"mmrNum":4000,"heroes":"斯温(5), 冥魂大帝(2), 克林克兹(1)"},{"id":"p_b64620511c5b21e0ac5ff48a","identity_status":"verified","avatar":"https://avatars.steamstatic.com/4630f69775f0b88c66f4064a6b4fe772f0829fb3_full.jpg","samples":{"kills":12,"deaths":12,"assists":12,"net_worth":12,"gold_per_min":12,"xp_per_min":12,"last_hits":12,"denies":12,"hero_damage":12,"hero_damage_taken":12,"tower_damage":12,"hero_healing":12,"stuns":12,"observer_sentry_wards":12,"wards_destroyed":12,"level":12,"kda":12,"dmg_gold":12,"role":12,"results":12},"name":"肛客","rating":968.9,"elo":1021.8,"perf":900.5,"role":"核心","provisional":false,"games":12,"wins":7,"losses":5,"winRate":58.333333333333336,"coreRate":"58%","rankAll":6.17,"rankTeam":3.5,"kda":2.42,"kd":"4.7/8.4/15.7","gpm":398.5,"xpm":597.7,"nwK":14.8,"dmgK":16.9,"dmgTakenK":35.1,"dmgGold":1.18,"takenGold":2.47,"mmr":2000,"mmrNum":2000,"heroes":"斧王(3), 半人马战行者(2), 钢背兽(2)"},{"id":"p_252b745c3d55057482a7e8f3","identity_status":"verified","avatar":"https://avatars.steamstatic.com/b040a553395c6b0cf24461eed079ed886f4ab92e_full.jpg","samples":{"kills":14,"deaths":14,"assists":14,"net_worth":14,"gold_per_min":14,"xp_per_min":14,"last_hits":14,"denies":14,"hero_damage":14,"hero_damage_taken":14,"tower_damage":14,"hero_healing":14,"stuns":14,"observer_sentry_wards":14,"wards_destroyed":14,"level":14,"kda":14,"dmg_gold":14,"role":14,"results":14},"name":"西恩DoTA亡","rating":1026.5,"elo":1008.5,"perf":1043.8,"role":"核心","provisional":false,"games":14,"wins":7,"losses":7,"winRate":50.0,"coreRate":"100%","rankAll":2.57,"rankTeam":1.64,"kda":5.33,"kd":"8.8/4.1/13.3","gpm":578.5,"xpm":753.7,"nwK":21.6,"dmgK":26.4,"dmgTakenK":22.6,"dmgGold":1.19,"takenGold":1.04,"mmr":4000,"mmrNum":4000,"heroes":"莉娜(2), 不朽尸王(1), 复仇之魂(1)"},{"id":"p_54295064cb065bbe6289c004","identity_status":"verified","avatar":"https://avatars.steamstatic.com/5c5f4dd53fcae896790f5535763a1d7f7c77d738_full.jpg","samples":{"kills":16,"deaths":16,"assists":16,"net_worth":16,"gold_per_min":16,"xp_per_min":16,"last_hits":16,"denies":16,"hero_damage":16,"hero_damage_taken":16,"tower_damage":16,"hero_healing":16,"stuns":16,"observer_sentry_wards":16,"wards_destroyed":16,"level":16,"kda":16,"dmg_gold":16,"role":16,"results":16},"name":"大超哥","rating":1024.0,"elo":1007.3,"perf":1020.5,"role":"核心","provisional":false,"games":16,"wins":8,"losses":8,"winRate":50.0,"coreRate":"100%","rankAll":3.19,"rankTeam":1.69,"kda":3.93,"kd":"11.1/5.9/12.0","gpm":594.3,"xpm":796.9,"nwK":21.7,"dmgK":37.1,"dmgTakenK":28.6,"dmgGold":1.58,"takenGold":1.31,"mmr":4500,"mmrNum":4500,"heroes":"殁境神蚀者(2), 编织者(2), 主宰(1)"},{"id":"p_776a704102ea850808a1910b","identity_status":"verified","avatar":"https://avatars.steamstatic.com/976f2185f27ef3ffea221c942edcc0d36c58e73c_full.jpg","samples":{"kills":12,"deaths":12,"assists":12,"net_worth":12,"gold_per_min":12,"xp_per_min":12,"last_hits":12,"denies":12,"hero_damage":12,"hero_damage_taken":12,"tower_damage":12,"hero_healing":12,"stuns":12,"observer_sentry_wards":12,"wards_destroyed":12,"level":12,"kda":12,"dmg_gold":12,"role":12,"results":12},"name":"不明AOE","rating":1000.3,"elo":997.6,"perf":1004.1,"role":"酱油","provisional":false,"games":12,"wins":6,"losses":6,"winRate":50.0,"coreRate":"42%","rankAll":6.58,"rankTeam":3.5,"kda":2.22,"kd":"5.2/8.6/13.9","gpm":365.1,"xpm":541.9,"nwK":13.2,"dmgK":21.5,"dmgTakenK":18.6,"dmgGold":1.45,"takenGold":1.41,"mmr":3000,"mmrNum":3000,"heroes":"邪影芳灵(3), 不朽尸王(1), 主宰(1)"},{"id":"p_08d511bbd08487dbba0ea7ec","identity_status":"verified","avatar":"https://avatars.steamstatic.com/14da02af9c403c96f57ce3a3ab4ec246a84e9d2f_full.jpg","samples":{"kills":17,"deaths":17,"assists":17,"net_worth":17,"gold_per_min":17,"xp_per_min":17,"last_hits":17,"denies":17,"hero_damage":17,"hero_damage_taken":17,"tower_damage":17,"hero_healing":17,"stuns":17,"observer_sentry_wards":17,"wards_destroyed":17,"level":17,"kda":17,"dmg_gold":17,"role":17,"results":17},"name":"龙鸣","rating":997.5,"elo":980.2,"perf":984.8,"role":"核心","provisional":false,"games":17,"wins":8,"losses":9,"winRate":47.05882352941176,"coreRate":"82%","rankAll":4.53,"rankTeam":2.41,"kda":3.83,"kd":"6.8/6.1/16.4","gpm":495.9,"xpm":694.9,"nwK":18.7,"dmgK":25.4,"dmgTakenK":26.2,"dmgGold":1.4,"takenGold":1.57,"mmr":4000,"mmrNum":4000,"heroes":"冥界亚龙(2), 复仇之魂(2), 主宰(1)"},{"id":"p_869ab2138ec94f6747f8706f","identity_status":"verified","avatar":"https://avatars.steamstatic.com/e1b63dfcaa136179386123a62f1a4d99d4d1e58d_full.jpg","samples":{"kills":15,"deaths":15,"assists":15,"net_worth":15,"gold_per_min":15,"xp_per_min":15,"last_hits":15,"denies":15,"hero_damage":15,"hero_damage_taken":15,"tower_damage":15,"hero_healing":15,"stuns":15,"observer_sentry_wards":15,"wards_destroyed":15,"level":15,"kda":15,"dmg_gold":15,"role":15,"results":15},"name":"WW","rating":991.3,"elo":987.5,"perf":1021.0,"role":"酱油","provisional":false,"games":15,"wins":7,"losses":8,"winRate":46.666666666666664,"coreRate":"27%","rankAll":7.67,"rankTeam":4.07,"kda":2.95,"kd":"3.9/7.1/17.0","gpm":322.7,"xpm":486.2,"nwK":11.2,"dmgK":13.8,"dmgTakenK":20.7,"dmgGold":1.26,"takenGold":1.92,"mmr":2000,"mmrNum":2000,"heroes":"上古巨神(2), 复仇之魂(2), 树精卫士(2)"},{"id":"p_58cf21a232c99fb25333e341","identity_status":"verified","avatar":"https://avatars.steamstatic.com/60f5208a5d25b6533220fd6274611fe9bbd6a62a_full.jpg","samples":{"kills":14,"deaths":14,"assists":14,"net_worth":14,"gold_per_min":14,"xp_per_min":14,"last_hits":14,"denies":14,"hero_damage":14,"hero_damage_taken":14,"tower_damage":14,"hero_healing":14,"stuns":14,"observer_sentry_wards":14,"wards_destroyed":14,"level":14,"kda":14,"dmg_gold":14,"role":14,"results":14},"name":"奶龙","rating":1016.8,"elo":980.0,"perf":1082.6,"role":"酱油","provisional":false,"games":14,"wins":6,"losses":8,"winRate":42.857142857142854,"coreRate":"21%","rankAll":8.0,"rankTeam":4.29,"kda":3.22,"kd":"3.5/7.3/19.9","gpm":337.4,"xpm":540.1,"nwK":11.6,"dmgK":18.9,"dmgTakenK":22.0,"dmgGold":1.74,"takenGold":1.87,"mmr":3000,"mmrNum":3000,"heroes":"寒冬飞龙(3), 朗戈(2), 发条技师(1)"},{"id":"p_3187aaada5d29c3cb7b2181b","identity_status":"verified","avatar":"https://avatars.steamstatic.com/902885a22681dcdae102163cbc852e7c42f4c93d_full.jpg","samples":{"kills":7,"deaths":7,"assists":7,"net_worth":7,"gold_per_min":7,"xp_per_min":7,"last_hits":7,"denies":7,"hero_damage":7,"hero_damage_taken":7,"tower_damage":7,"hero_healing":7,"stuns":7,"observer_sentry_wards":7,"wards_destroyed":7,"level":7,"kda":7,"dmg_gold":7,"role":7,"results":7},"name":"猪猪侠","rating":981.6,"elo":983.2,"perf":994.3,"role":"酱油","provisional":false,"games":7,"wins":3,"losses":4,"winRate":42.857142857142854,"coreRate":"43%","rankAll":7.57,"rankTeam":4.14,"kda":1.8,"kd":"3.7/11.9/17.6","gpm":347.7,"xpm":480.0,"nwK":12.7,"dmgK":23.1,"dmgTakenK":33.9,"dmgGold":1.77,"takenGold":2.59,"mmr":2000,"mmrNum":2000,"heroes":"钢背兽(2), 不朽尸王(1), 天怒法师(1)"},{"id":"p_8cd32fac7115a761b3775bd7","identity_status":"verified","avatar":"https://avatars.steamstatic.com/4b18c1623cc1d6e9c03f48f549a030cc5c9242dd_full.jpg","samples":{"kills":19,"deaths":19,"assists":19,"net_worth":19,"gold_per_min":19,"xp_per_min":19,"last_hits":19,"denies":19,"hero_damage":19,"hero_damage_taken":19,"tower_damage":19,"hero_healing":19,"stuns":19,"observer_sentry_wards":19,"wards_destroyed":19,"level":19,"kda":19,"dmg_gold":19,"role":19,"results":19},"name":"K2","rating":938.3,"elo":901.8,"perf":958.6,"role":"酱油","provisional":false,"games":19,"wins":6,"losses":13,"winRate":31.57894736842105,"coreRate":"0%","rankAll":8.58,"rankTeam":4.37,"kda":1.79,"kd":"3.6/9.9/14.2","gpm":307.7,"xpm":467.9,"nwK":11.0,"dmgK":15.9,"dmgTakenK":20.8,"dmgGold":1.48,"takenGold":1.92,"mmr":2000,"mmrNum":2000,"heroes":"巫妖(3), 巫医(2), 杰奇洛(2)"},{"id":"p_ba5ff73663a9ad2034e895a1","identity_status":"verified","avatar":"https://avatars.steamstatic.com/64385ecca70900576ec260d5e6732e1fee8e7631_full.jpg","samples":{"kills":13,"deaths":13,"assists":13,"net_worth":13,"gold_per_min":13,"xp_per_min":13,"last_hits":13,"denies":13,"hero_damage":13,"hero_damage_taken":13,"tower_damage":13,"hero_healing":13,"stuns":13,"observer_sentry_wards":13,"wards_destroyed":13,"level":13,"kda":13,"dmg_gold":13,"role":13,"results":13},"name":"我才是乃龙","rating":963.1,"elo":892.8,"perf":986.7,"role":"核心","provisional":false,"games":13,"wins":3,"losses":10,"winRate":23.076923076923077,"coreRate":"85%","rankAll":5.08,"rankTeam":2.23,"kda":3.03,"kd":"8.8/7.2/13.1","gpm":504.9,"xpm":698.6,"nwK":18.8,"dmgK":32.5,"dmgTakenK":31.0,"dmgGold":1.85,"takenGold":1.82,"mmr":4000,"mmrNum":4000,"heroes":"冥界亚龙(2), 莉娜(2), 司夜刺客(1)"},{"id":"p_5759e7b62f4a4e23d64dc5db","identity_status":"verified","avatar":"https://avatars.steamstatic.com/a1a138e4fbe5212cfb08dd70fb66ab41e289ff39_full.jpg","samples":{"kills":5,"deaths":5,"assists":5,"net_worth":5,"gold_per_min":5,"xp_per_min":5,"last_hits":5,"denies":5,"hero_damage":5,"hero_damage_taken":5,"tower_damage":5,"hero_healing":5,"stuns":5,"observer_sentry_wards":5,"wards_destroyed":5,"level":5,"kda":5,"dmg_gold":5,"role":5,"results":5},"name":"你也在网上冲浪？","rating":954.0,"elo":959.2,"perf":934.3,"role":"核心","provisional":false,"games":5,"wins":1,"losses":4,"winRate":20.0,"coreRate":"80%","rankAll":5.6,"rankTeam":2.8,"kda":2.32,"kd":"6.4/8.2/12.6","gpm":455.0,"xpm":630.6,"nwK":17.7,"dmgK":21.5,"dmgTakenK":28.4,"dmgGold":1.21,"takenGold":1.6,"mmr":2000,"mmrNum":null,"heroes":"影魔(1), 暗影萨满(1), 末日使者(1)"}];
 const MATCH_COUNT = 20;
@@ -1056,18 +1063,13 @@ function buildSplits(sel) {
   }
   return splits;
 }
-function shuffle(a) {
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 function roll() {
   const sel = PLAYERS.filter(p => state.selected.has(p.id));
   if (sel.length !== 10) return;
   const cores = sel.filter(p => p.role === "核心").length;
-  const top2 = new Set([...sel].sort((x, y) => y.rating - x.rating).slice(0, 2).map(p => p.id));
+  const ranked = [...sel].sort((x, y) => y.rating - x.rating);
+  const top2 = new Set(ranked.slice(0, 2).map(p => p.id));
+  const bot2 = new Set(ranked.slice(-2).map(p => p.id));   // R6：综合分最低的两名
   const all = buildSplits(sel);
 
   const levels = [
@@ -1077,7 +1079,7 @@ function roll() {
     { label: "再放宽 R4 到 40%–60%", diff: 15, lo: .40, hi: .60, stack: false },
   ];
 
-  let chosenLevel = null, valid = [];
+  let chosenLevel = null, valid = [], r6Ok = null;
   for (const lv of levels) {
     valid = all.filter(r => {
       if (Math.abs(r.ca - r.cb) > 1) return false;
@@ -1097,13 +1099,21 @@ function roll() {
     return;
   }
 
-  valid.sort((x, y) => y.score - x.score || x.diff - y.diff);
-  const pool = valid.slice(0, Math.min(10, valid.length));
-  const picks = shuffle([...pool]).slice(0, 3);
+  // R6（不严格规则）：综合分最低的两名不同队。没有随机抽取：
+  // 合格方案按平衡分从高到低排序（同分均分差小者在前），先取满足 R6 的，
+  // 不足 3 套时按平衡分从高到低依次用不满足 R6 的合格方案补上（审计里记 WARN）
+  const splitBot = r => r.a.filter(p => bot2.has(p.id)).length;
+  r6Ok = r => splitBot(r) === 1;
+  const byScore = (x, y) => y.score - x.score || x.diff - y.diff;
+  const preferred = valid.filter(r6Ok).sort(byScore);
+  const fallback = valid.filter(r => !r6Ok(r)).sort(byScore);
+  const pool = [...preferred, ...fallback];
+  const picks = pool.slice(0, 3);
 
   state.results = picks;
   state.rollPool = sel.map(p => p.id);
   state.rollTop2 = [...top2];
+  state.rollBot2 = [...bot2];
   state.rollLevel = chosenLevel;
   state.adopted = null;
   resetAI();
@@ -1111,32 +1121,43 @@ function roll() {
   const probs = pool.map(x => x.pa);
   const basis = `<div class="why" style="margin-bottom:12px">
     本次共 ${all.length} 种分法；在【${chosenLevel.label}】下合格 ${valid.length} 种；
-    roll 池取平衡分前 ${pool.length} 套，池内胜率
-    ${(Math.min(...probs) * 100).toFixed(1)}%–${(Math.max(...probs) * 100).toFixed(1)}%。
-    以下 3 套均从池内随机抽取。
+    其中满足 R6（后 2 名不同队）${preferred.length} 种；
+    展示平衡分最高的前 3 套（优先满足 R6${preferred.length < 3 ? `；满足 R6 的仅 ${preferred.length} 种，不足部分按平衡分从高到低用不满足 R6 的合格方案补上` : ""}），
+    全部合格方案胜率 ${(Math.min(...probs) * 100).toFixed(1)}%–${(Math.max(...probs) * 100).toFixed(1)}%。
   </div>`;
 
-  $("results").innerHTML = basis + picks.map((r, i) => card(r, i + 1, top2, chosenLevel)).join("");
+  $("results").innerHTML = basis + picks.map((r, i) => card(r, i + 1, top2, chosenLevel, bot2, cores)).join("");
   state.resultsHtml = $("results").innerHTML;
   updateAIAction();
 }
 function memberHtml(p) {
   return `<span class="member"><b>${esc(p.name)}</b><span>${Math.round(p.rating)}</span></span>`;
 }
-function auditRows(r, top2, lv) {
-  const a2 = r.a.filter(p => top2.has(p.id)).length;
-  const b2 = r.b.filter(p => top2.has(p.id)).length;
-  return [
-    ["R2 每队结构", "核心数差 ≤ 1", `A ${r.ca}核${5 - r.ca}辅 / B ${r.cb}核${5 - r.cb}辅`, Math.abs(r.ca - r.cb) <= 1],
-    ["R3 均分差", `≤ ${lv.diff}`, `${r.diff.toFixed(1)}`, r.diff <= lv.diff],
+function auditRows(r, top2, lv, bot2, cores) {
+  const cnt = (team, set) => team.filter(p => set.has(p.id)).length;
+  const a2 = cnt(r.a, top2), b2 = cnt(r.b, top2);
+  const rows = [];
+  // R1 名单结构：非硬门槛，不满足记 WARN。cores 未提供时（旧调用）不显示这一行
+  if (typeof cores === "number") {
+    rows.push(["R1 名单结构", "建议 6 核 + 4 辅（非硬性）", `${cores} 核 + ${10 - cores} 辅`, cores === 6 ? "PASS" : "WARN"]);
+  }
+  rows.push(
+    ["R2 每队结构", "核心数差 ≤ 1", `A ${r.ca}核${5 - r.ca}辅 / B ${r.cb}核${5 - r.cb}辅`, Math.abs(r.ca - r.cb) <= 1 ? "PASS" : "FAIL"],
+    ["R3 均分差", `≤ ${lv.diff}`, `${r.diff.toFixed(1)}`, r.diff <= lv.diff ? "PASS" : "FAIL"],
     ["R4 预测胜率", `${(lv.lo * 100).toFixed(0)}%–${(lv.hi * 100).toFixed(0)}%`,
-      `${(r.pa * 100).toFixed(1)}% / ${((1 - r.pa) * 100).toFixed(1)}%`, r.pa >= lv.lo && r.pa <= lv.hi],
-    ["R5 不堆叠", "前 2 名不同队", `A${a2} / B${b2}`, !(a2 === 2 || b2 === 2)],
-  ].map(([n, req, act, ok]) =>
-    `<div class="audit-row"><span>${n} · ${req}</span><span>${act} <span class="${ok ? "ok" : "no"}">${ok ? "PASS" : "FAIL"}</span></span></div>`
+      `${(r.pa * 100).toFixed(1)}% / ${((1 - r.pa) * 100).toFixed(1)}%`, r.pa >= lv.lo && r.pa <= lv.hi ? "PASS" : "FAIL"],
+    ["R5 不堆叠", "前 2 名不同队", `A${a2} / B${b2}`, !(a2 === 2 || b2 === 2) ? "PASS" : "FAIL"]
+  );
+  // R6 后 2 名不同队：不严格规则，不满足记 WARN；bot2 缺失（旧数据）时不显示
+  if (bot2 && bot2.size) {
+    const a6 = cnt(r.a, bot2), b6 = cnt(r.b, bot2);
+    rows.push(["R6 后 2 名分开", "后 2 名不同队（非严格）", `A${a6} / B${b6}`, a6 === 1 ? "PASS" : "WARN"]);
+  }
+  return rows.map(([n, req, act, st]) =>
+    `<div class="audit-row"><span>${n} · ${req}</span><span>${act} <span class="${st === "PASS" ? "ok" : st === "WARN" ? "warn" : "no"}">${st}</span></span></div>`
   ).join("");
 }
-function card(r, idx, top2, lv) {
+function card(r, idx, top2, lv, bot2, cores) {
   return `<div class="card">
     <div class="card-head">
       <div class="card-title">方案 ${idx}</div>
@@ -1154,9 +1175,9 @@ function card(r, idx, top2, lv) {
     </div>
     <div class="audit">
       <div class="team-label" style="margin-bottom:6px">规则审计</div>
-      ${auditRows(r, top2, lv)}
+      ${auditRows(r, top2, lv, bot2, cores)}
     </div>
-    <div class="why">依据：该方案从合格池随机抽取；各项规则及放宽情况见本卡片审计结果。</div>
+    <div class="why">依据：该方案为合格方案中平衡分靠前者；各项规则及放宽情况见本卡片审计结果。</div>
   </div>`;
 }
 
@@ -1457,11 +1478,12 @@ function handleDisplayMatch(tool) {
   const id = "m" + Date.now() + "_" + Object.keys(state.ai.cards).length;
   state.ai.cards[id] = r;
   const top2 = new Set(state.rollTop2 || []);
+  const bot2 = new Set(state.rollBot2 || []);
   const lv = state.rollLevel || { diff: 10, lo: .45, hi: .55 };
-  addMsg("assistant", matchCardHtml(r, id, inp.reason || "", top2, lv), "match-wrap");
+  addMsg("assistant", matchCardHtml(r, id, inp.reason || "", top2, lv, bot2), "match-wrap");
   return { ok: true };
 }
-function matchCardHtml(r, id, reason, top2, lv) {
+function matchCardHtml(r, id, reason, top2, lv, bot2) {
   return `<div class="match-card">
     <div class="mc-head">
       <div class="mc-title">AI 建议阵容</div>
@@ -1476,7 +1498,7 @@ function matchCardHtml(r, id, reason, top2, lv) {
       <div class="team-label">队伍 B · 核心 ${r.cb} / 酱油 ${5 - r.cb}</div>
       <div class="members">${[...r.b].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
     </div>
-    <div class="audit">${auditRows(r, top2, lv)}</div>
+    <div class="audit">${auditRows(r, top2, lv, bot2, state.rollPool.length ? state.rollPool.map(n => PLAYERS.find(p => p.id === n)).filter(p => p && p.role === "核心").length : undefined)}</div>
     ${reason ? `<div class="mc-reason">${esc(reason)}</div>` : ""}
     <div class="mc-actions">
       <button class="primary" onclick="adoptLineup('${id}')">采用此阵容</button>
