@@ -99,3 +99,24 @@
   .rp-overview>div:last-child { grid-template-columns:1fr; gap:0; }
   .rp-tabs a { padding:10px; }.rp-table { min-width:680px; }
 }
+
+.rp-sort { background:none; border:0; padding:0; margin:0; font:inherit; color:inherit; font-weight:inherit; cursor:pointer; white-space:nowrap; }
+.rp-sort:hover, .rp-sort.active { color:#e6c77f; }
+
+/* 好基友 / 冤家 标记：红心(好基友) 与 裂心(冤家)，第 1 名最浓，第 2、3 名依次变淡 */
+.rp-mark { display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:1px 7px 1px 5px; border-radius:999px; font-size:11px; font-weight:700; line-height:18px; border:1px solid currentColor; vertical-align:middle; white-space:nowrap; cursor:help; }
+.rp-mark-ico { width:15px; height:15px; }
+.rp-mark.m0 { color:#ff2d4a; background:#33070f; box-shadow:0 0 7px rgba(255,45,74,.45); }
+.rp-mark.m1 { color:#ff7487; background:#2c1218; box-shadow:0 0 5px rgba(255,116,135,.28); }
+.rp-mark.m2 { color:#ffa9b5; background:#27161a; box-shadow:0 0 3px rgba(255,169,181,.18); }
+.rp-mark.bad.m0 { color:#7d97b8; background:#111a26; box-shadow:0 0 7px rgba(125,151,184,.45); }
+.rp-mark.bad.m1 { color:#a3b6cf; background:#171d26; box-shadow:0 0 5px rgba(163,182,207,.28); }
+.rp-mark.bad.m2 { color:#c8d3e2; background:#1b1f26; box-shadow:0 0 3px rgba(200,211,226,.18); }
+
+/* 克星(对手页)：取法师克星装备的蓝紫色(色相 ~250°)；安全带取其互补色(色相 ~70° 黄绿)。第 1 名最浓，第 2、3 名依次变淡 */
+.rp-mark.nemesis.m0 { color:#8f7bff; background:#1a1438; box-shadow:0 0 7px rgba(143,123,255,.5); }
+.rp-mark.nemesis.m1 { color:#a394e6; background:#1b1830; box-shadow:0 0 5px rgba(163,148,230,.3); }
+.rp-mark.nemesis.m2 { color:#c5bbf0; background:#1d1b2b; box-shadow:0 0 3px rgba(197,187,240,.2); }
+.rp-mark.safety.m0 { color:#c9e83a; background:#232a06; box-shadow:0 0 7px rgba(201,232,58,.45); }
+.rp-mark.safety.m1 { color:#d6ec7c; background:#252a10; box-shadow:0 0 5px rgba(214,236,124,.28); }
+.rp-mark.safety.m2 { color:#e6f2b4; background:#262a1a; box-shadow:0 0 3px rgba(230,242,180,.18); }

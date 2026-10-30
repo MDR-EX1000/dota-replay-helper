@@ -5,7 +5,7 @@
 })(typeof window !== "undefined" ? window : globalThis, function () {
   "use strict";
   const VIEWS = {overview: "概览", matches: "比赛记录", heroes: "英雄统计", peers: "队友", opponents: "对手"};
-  const TITLES = {mvp: "MVP", wealth: "富豪", kills: "破敌", towers: "破军", support: "偏将", denies: "补王", soul: "英魂"};
+  const TITLES = {mvp: "MVP", svp: "SVP", wealth: "富豪", kills: "破敌", towers: "破军", support: "偏将", denies: "补王"};
   const valid = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
   const esc = value => String(value == null ? "" : value).replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
   const number = (value, digits = 0) => value == null ? "暂无数据" : Number(value).toFixed(digits);
@@ -60,6 +60,46 @@
   }
   const peerStats = records => relationshipStats(records, false);
   const opponentStats = records => relationshipStats(records, true);
+  // 标记共用口径：把“有他在场”的场次胜率，与“没他在场”的场次胜率相比（排除自己稀释的口径偏差）。
+  // 同队口径：好基友（同队胜率明显更高）/ 冤家（明显更低）。
+  // 对阵口径：安全带（对阵胜率明显更高，是好打的对手）/ 克星（明显更低，是难打的对手）。
+  // 门槛（经验值，非统计显著性检验）：有他在场 >= MARK_MIN_WITH 场，没他在场 >= MARK_MIN_WITHOUT 场，
+  // 胜率差 >= MARK_MIN_GAP 个百分点，并满足绝对胜率：高方 >= 55%，低方 <= 45%（避免“自身只有 27%，40% 就叫好”）。
+  // 每类最多 MARK_MAX 个，按差值排名 1/2/3；不满足就没有，不硬凑。同一人不可能同时落入“好”和“坏”两类
+  const MARK_MIN_WITH = 5, MARK_MIN_WITHOUT = 3, MARK_MIN_GAP = 20, MARK_MAX = 3;
+  const MARK_HIGH_RATE = 55, MARK_LOW_RATE = 45;
+  // 对阵口径“没他在场”的场次通常更少、更不稳，所以下限更高
+  const MARK_MIN_WITHOUT_VS = 4;
+  function relationMarks(records, versus) {
+    const known = records.filter(r => r.won !== null && ["radiant","dire"].includes(r.player.team));
+    const present = new Map();
+    for (const r of known) for (const peer of r.match.players || []) {
+      if (!peer.id || peer.id === r.player.id || !["radiant","dire"].includes(peer.team)) continue;
+      if (versus ? peer.team === r.player.team : peer.team !== r.player.team) continue;
+      if (!present.has(peer.id)) present.set(peer.id, new Set());
+      present.get(peer.id).add(r.match.id);
+    }
+    const rate = rows => rows.filter(r => r.won).length / rows.length * 100;
+    const minWithout = versus ? MARK_MIN_WITHOUT_VS : MARK_MIN_WITHOUT;
+    const scored = [];
+    for (const [id, matchIds] of present) {
+      const withHim = known.filter(r => matchIds.has(r.match.id));
+      const without = known.filter(r => !matchIds.has(r.match.id));
+      if (withHim.length < MARK_MIN_WITH || without.length < minWithout) continue;
+      scored.push({id, gap: rate(withHim) - rate(without), together: withHim.length,
+        togetherRate: rate(withHim), apartRate: rate(without)});
+    }
+    const pick = list => list.slice(0, MARK_MAX).map((x, i) => ({...x, rank: i}));
+    const stable = (a, b) => b.together - a.together || a.id.localeCompare(b.id);
+    return {
+      high: pick(scored.filter(x => x.gap >= MARK_MIN_GAP && x.togetherRate >= MARK_HIGH_RATE).sort((a, b) => b.gap - a.gap || stable(a, b))),
+      low: pick(scored.filter(x => x.gap <= -MARK_MIN_GAP && x.togetherRate <= MARK_LOW_RATE).sort((a, b) => a.gap - b.gap || stable(a, b)))
+    };
+  }
+  function buddyMarks(records) {
+    const t = relationMarks(records, false), o = relationMarks(records, true);
+    return {buddies: t.high, rivals: t.low, safety: o.high, nemesis: o.low};
+  }
   function buildProfile(player, matches) {
     const records = [];
     for (const match of [...matches].sort((a, b) => dateKey(b) - dateKey(a) || String(b.id).localeCompare(String(a.id)))) {
@@ -70,8 +110,13 @@
       }
     }
     const honors = Object.fromEntries(Object.keys(TITLES).map(key => [key, 0]));
-    for (const r of records) for (const title of r.player.titles || []) if (Object.prototype.hasOwnProperty.call(honors, title.key)) honors[title.key]++;
-    return {player, records, ...recordSummary(records), heroes: heroStats(records), peers: peerStats(records), opponents: opponentStats(records), honors,
+    for (const r of records) {
+      for (const title of r.player.titles || []) if (Object.prototype.hasOwnProperty.call(honors, title.key)) honors[title.key]++;
+      // MVP/SVP 由评分系统写入 player.title（字符串），不在 titles 数组里
+      if (r.player.title === "MVP") honors.mvp++;
+      else if (r.player.title === "SVP") honors.svp++;
+    }
+    return {player, records, ...recordSummary(records), heroes: heroStats(records), peers: peerStats(records), opponents: opponentStats(records), marks: buddyMarks(records), honors,
       gpm: average(records, "gpm"), xpm: average(records, "xpm"),
       damage: average(records, "hero_damage"), healing: average(records, "healing"),
       lastSeen: records.length ? records[0].match.date || "时间未知" : "暂无比赛"};
@@ -116,7 +161,7 @@
 
   function mount(options) {
     const {root, players, matches, avatarHtml} = options;
-    const state = {id:null, view:"overview", hero:"all", result:"all", page:1, query:""};
+    const state = {id:null, view:"overview", hero:"all", result:"all", page:1, query:"", sort:"", dir:"desc"};
     let current = null;
     root.innerHTML = `<div class="rp-layout"><aside class="rp-directory"><label for="profileSearch">玩家资料 <span>${players.length} 人</span></label>
       <input id="profileSearch" type="search" placeholder="搜索玩家昵称" autocomplete="off"><div id="profileList" class="rp-player-list"></div></aside>
@@ -163,14 +208,54 @@
         ${matchesTable(rows.slice((state.page-1)*10,state.page*10))}
         <div class="rp-pagination"><button data-page="${state.page-1}" ${state.page===1 ? "disabled" : ""}>上一页</button><span>第 ${state.page} / ${pages} 页</span><button data-page="${state.page+1}" ${state.page===pages ? "disabled" : ""}>下一页</button></div></section>`;
     }
+    const MARK_ICONS = {
+      good: '<svg class="rp-mark-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 C5 15.5 2 12 2 8.2 C2 5.4 4.2 3.5 6.8 3.5 C9 3.5 10.8 4.8 12 6.6 C13.2 4.8 15 3.5 17.2 3.5 C19.8 3.5 22 5.4 22 8.2 C22 12 19 15.5 12 21Z" fill="currentColor"/></svg>',
+      bad: '<svg class="rp-mark-ico" viewBox="0 0 24 24" aria-hidden="true"><path transform="translate(-1.3 0)" d="M12 21 C5 15.5 2 12 2 8.2 C2 5.4 4.2 3.5 6.8 3.5 C9 3.5 10.8 4.8 12 6.6 L10.8 10 L13.2 12.2 L11.2 15.6 Z" fill="currentColor"/><path transform="translate(1.3 0)" d="M12 6.6 C13.2 4.8 15 3.5 17.2 3.5 C19.8 3.5 22 5.4 22 8.2 C22 12 19 15.5 12 21 L11.2 15.6 L13.2 12.2 L10.8 10 Z" fill="currentColor"/></svg>',
+      nemesis: '<svg class="rp-mark-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.2 21.4 L13.4 9.4" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/><path d="M10.6 12.8 C8.4 8.6 10.2 4.2 15 2.6 C14.4 5 14.8 6.8 16.6 8.4 C14.8 8.4 13.6 9.6 12.6 11.2 Z" fill="currentColor"/><path d="M13.2 10.2 C16 8 19.6 8.2 22 10.4 C19.8 10.8 18.4 11.8 17.8 13.4 C16.4 12 14.8 11.6 13.2 12.4 Z" fill="currentColor"/><circle cx="14.6" cy="6.6" r="0.9" fill="#0b0d12" opacity=".75"/><circle cx="17.6" cy="10.6" r="0.9" fill="#0b0d12" opacity=".75"/><path d="M20.6 3.4 L19 6 L21 6.2 L19.6 8.4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".9"/></svg>',
+      safety: '<svg class="rp-mark-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 2 H8 L20.4 15.2 H16.4 Z" fill="currentColor" opacity=".88"/><path d="M1.8 18 H22.2 V21.8 H1.8 Z" fill="currentColor" opacity=".88"/><rect x="9.4" y="12.4" width="7.4" height="6.8" rx="1.5" fill="currentColor"/><rect x="11.1" y="14.1" width="4" height="3.4" rx=".7" fill="#0b0d12" opacity=".6"/><path d="M13.1 12.4 V9.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
+    };
+    const MARK_NAMES = {good: "好基友", bad: "冤家", nemesis: "克星", safety: "安全带"};
+    const MARK_CTX = {good: ["同队", "不同队"], bad: ["同队", "不同队"], nemesis: ["交手", "未交手"], safety: ["交手", "未交手"]};
+    // 好基友/冤家/克星/安全带：按差值排名 1/2/3，颜色逐名变淡，悬停显示依据
+    function markBadge(mark) {
+      if (!mark) return "";
+      const name = MARK_NAMES[mark.kind], [near, far] = MARK_CTX[mark.kind];
+      const tip = `${name}（第 ${mark.rank + 1} 名）：${near} ${mark.together} 场胜率 ${mark.togetherRate.toFixed(0)}%，${far}胜率 ${mark.apartRate.toFixed(0)}%，差 ${mark.gap > 0 ? "+" : ""}${mark.gap.toFixed(0)} 个百分点`;
+      return `<span class="rp-mark m${mark.rank} ${mark.kind}" title="${esc(tip)}">${MARK_ICONS[mark.kind]}${name}</span>`;
+    }
+    // 队友/对手表排序：sort=games|winRate，dir=desc|asc；未选择排序时保持默认顺序。
+    // 胜率为空（结果全未知）的行始终排最后；同值时沿用默认顺序，保证稳定
+    function sortRelations(rows) {
+      if (!["games", "winRate"].includes(state.sort)) return rows;
+      const sign = state.dir === "asc" ? 1 : -1;
+      return rows.map((row, i) => ({row, i})).sort((a, b) => {
+        const x = a.row[state.sort], y = b.row[state.sort];
+        if (x == null && y == null) return a.i - b.i;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (x - y) * sign || a.i - b.i;
+      }).map(item => item.row);
+    }
+    function sortHeader(key, label) {
+      const active = state.sort === key;
+      const arrow = active ? (state.dir === "asc" ? " ▲" : " ▼") : "";
+      return `<th><button type="button" class="rp-sort ${active ? "active" : ""}" data-sort="${key}" aria-label="按${esc(label)}排序">${esc(label)}${arrow}</button></th>`;
+    }
     function relationsView(profile, opponents = false) {
-      const rows = opponents ? profile.opponents : profile.peers;
-      return `<section class="rp-card"><div class="rp-section-head"><h3>${opponents ? "对手交手记录" : "共同出场的队友"}</h3><span>${opponents ? "仅统计敌方玩家 · 胜率以本玩家为视角" : "仅统计同队比赛"}</span></div>${rows.length ? `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>玩家</th><th>${opponents ? "交手场次" : "同队场次"}</th><th>胜 / 负</th><th>${opponents ? "对抗胜率" : "同队胜率"}</th><th>最近${opponents ? "交手" : "同队"}</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${link(p.player)}</td><td>${p.games}</td><td>${p.wins} / ${p.losses}${p.unknown ? "（未知 " + p.unknown + "）" : ""}</td><td>${percent(p.winRate)}</td><td>${esc(p.lastSeen)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="rp-empty">暂无${opponents ? "对手交手" : "同队"}记录</div>`}</section>`;
+      const rows = sortRelations(opponents ? profile.opponents : profile.peers);
+      const markOf = new Map();
+      const sets = opponents ? [["nemesis", profile.marks.nemesis], ["safety", profile.marks.safety]]
+                             : [["good", profile.marks.buddies], ["bad", profile.marks.rivals]];
+      for (const [kind, list] of sets) for (const x of list) markOf.set(x.id, {...x, kind});
+      return `<section class="rp-card"><div class="rp-section-head"><h3>${opponents ? "对手交手记录" : "共同出场的队友"}</h3><span>${opponents ? "仅统计敌方玩家 · 胜率以本玩家为视角" : "仅统计同队比赛"} · 点击表头可排序</span></div>${rows.length ? `<div class="rp-table-wrap"><table class="rp-table"><thead><tr><th>玩家</th>${sortHeader("games", opponents ? "交手场次" : "同队场次")}<th>胜 / 负</th>${sortHeader("winRate", opponents ? "对抗胜率" : "同队胜率")}<th>最近${opponents ? "交手" : "同队"}</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${link(p.player)}${markBadge(markOf.get(p.player.id))}</td><td>${p.games}</td><td>${p.wins} / ${p.losses}${p.unknown ? "（未知 " + p.unknown + "）" : ""}</td><td>${percent(p.winRate)}</td><td>${esc(p.lastSeen)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="rp-empty">暂无${opponents ? "对手交手" : "同队"}记录</div>`}</section>`;
     }
     function updateHash() {
       const query = new URLSearchParams({player:state.id,view:state.view});
       if (state.view === "matches") {
         query.set("hero",state.hero); query.set("result",state.result); query.set("page",String(state.page));
+      }
+      if ((state.view === "peers" || state.view === "opponents") && state.sort) {
+        query.set("sort",state.sort); query.set("dir",state.dir);
       }
       window.location.hash = query.toString();
     }
@@ -184,6 +269,11 @@
       detail.querySelectorAll("#profileHero, #profileResult").forEach(select=>select.addEventListener("change",()=>{
         state.hero=detail.querySelector("#profileHero").value; state.result=detail.querySelector("#profileResult").value; state.page=1; updateHash();
       }));
+      detail.querySelectorAll("[data-sort]").forEach(button=>button.addEventListener("click",()=>{
+        const key=button.dataset.sort;
+        if (state.sort===key) state.dir = state.dir==="desc" ? "asc" : "desc"; else {state.sort=key; state.dir="desc";}
+        updateHash();
+      }));
       detail.querySelectorAll("[data-page]").forEach(button=>button.addEventListener("click",()=>{state.page=Number(button.dataset.page);updateHash();}));
     }
     return {
@@ -194,6 +284,8 @@
         state.result = ["all","win","loss","unknown"].includes(query.get("result")) ? query.get("result") : "all";
         const page = Number(query.get("page") || 1);
         state.page = Number.isFinite(page) ? Math.max(1,Math.floor(page)) : 1;
+        state.sort = ["games","winRate"].includes(query.get("sort")) ? query.get("sort") : "";
+        state.dir = query.get("dir") === "asc" ? "asc" : "desc";
         const player = players.find(p=>p.id===state.id);
         current = player ? buildProfile(player,matches) : null;
         if (current && state.hero !== "all" && !current.heroes.some(h => h.key === state.hero)) state.hero = "all";
@@ -202,5 +294,5 @@
       get id() { return state.id; }
     };
   }
-  return {buildProfile, heroStats, peerStats, opponentStats, filterRecords, average, kda, heroImage, itemIcons, mount};
+  return {buildProfile, buddyMarks, heroStats, peerStats, opponentStats, filterRecords, average, kda, heroImage, itemIcons, mount};
 });
