@@ -8,6 +8,7 @@
     R3 均分差     两队综合分均值差 ≤ 10
     R4 预测胜率   45% ≤ 胜率 ≤ 55%
     R5 不堆叠     综合分前 2 名不能在同一队
+    R6 后2名分开  综合分最低的 2 名不同队（不严格规则：优先满足，不足时补齐，审计记 WARN）
 
 若没有任何方案同时满足 R1-R5，按以下顺序放宽，并在结果中注明：
     先放宽 R5 -> 再把 R3 放宽到 15 -> 再把 R4 放宽到 40%-60%
@@ -22,7 +23,6 @@ roll 只在通过规则的方案里均匀抽取，保证：
     python roll.py --top 5 --seed 42 "玩家1" ... "玩家10"
 """
 
-import random
 import sys
 from datetime import datetime
 from itertools import combinations
@@ -46,6 +46,7 @@ def resolve(name, players):
 
 
 def parse_args():
+    # --top 已不再限制池大小（池 = 全部合格方案），保留参数只为兼容旧命令
     names, top_n, seed = [], 5, None
     raw = sys.argv[1:]
     i = 0
@@ -79,7 +80,7 @@ def make_split(sel, combo):
     }
 
 
-def rule_rows(r, top2, limits):
+def rule_rows(r, top2, limits, bot2=None):
     """返回 [(规则, 要求, 实际, 是否通过)]，供现场核对。"""
     a_names = {p["name"] for p in r["team_a"]}
     b_names = {p["name"] for p in r["team_b"]}
@@ -99,6 +100,12 @@ def rule_rows(r, top2, limits):
         ("R5 不堆叠", "前 2 名不同队",
          f"前2名分布 A{top2_a} / B{top2_b}", stack_ok),
     ]
+    if bot2:
+        bot_a = len(bot2 & a_names)
+        bot_b = len(bot2 & b_names)
+        # R6 不严格：通过记 PASS，不通过记 WARN（返回第 4 项用 None 表示 WARN）
+        rows.append(("R6 后2名分开", "后2名不同队（非严格）",
+                     f"后2名分布 A{bot_a} / B{bot_b}", True if bot_a == 1 else None))
     return rows
 
 
@@ -126,7 +133,9 @@ def main():
     sel = [players[n] for n in resolved]
     cores = sum(1 for p in sel if p["role"] == "核心")
     supports = 10 - cores
-    top2 = {p["name"] for p in sorted(sel, key=lambda x: -x["rating"])[:2]}
+    ranked = sorted(sel, key=lambda x: -x["rating"])
+    top2 = {p["name"] for p in ranked[:2]}
+    bot2 = {p["name"] for p in ranked[-2:]}
 
     all_splits = [make_split(sel, c) for c in combinations(sel[1:], 4)]
 
@@ -157,15 +166,19 @@ def main():
         if rows:
             chosen_level, qualified = label, len(rows)
             rows.sort(key=lambda x: (-x["score"], x["diff"]))
-            pool = rows[:top_n]
+            # 不抽签：合格方案已按平衡分从高到低排序。R6 不严格：
+            # 先放满足 R6 的，不足时按平衡分从高到低用不满足 R6 的方案补上
+            ok6 = [r for r in rows if len(bot2 & {p["name"] for p in r["team_a"]}) == 1]
+            rest = [r for r in rows if r not in ok6]
+            pool = ok6 + rest
             break
 
     if not pool:
         print("没有任何方案满足最低规则，请检查名单和评分数据。")
         return 1
 
-    rng = random.Random(seed) if seed is not None else random.SystemRandom()
-    chosen = rng.choice(pool)
+    # 不再随机：直接取排序后的第一套（满足 R6 的平衡分最高者；没有则取非 R6 中平衡分最高者）
+    chosen = pool[0]
     pa = chosen["pa"]
     limits = next(l for name, l in levels if name == chosen_level)
 
@@ -178,8 +191,9 @@ def main():
     L.append("=" * 70)
     L.append(f"对黑 roll 结果    {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     L.append(f"名单: {cores} 核 + {supports} 辅    {len(all_splits)} 种分法，"
-             f"满足【{chosen_level}】的 {qualified} 种，roll 池前 {len(pool)} 套")
-    L.append(f"随机种子: {seed if seed is not None else '系统随机'}")
+             f"满足【{chosen_level}】的 {qualified} 种，其中满足 R6 的 {len(ok6)} 种；"
+             f"{'取其中平衡分最高者' if ok6 else '无满足 R6 的方案，取合格方案中平衡分最高者'}")
+    L.append("取法: 不抽签，合格方案按平衡分排序后取第一套（--seed/--top 参数已不再生效）")
     L.append("=" * 70)
 
     L.append("")
@@ -210,25 +224,26 @@ def main():
     L.append(f"{'规则':<12}{'要求':<16}{'本次实际':<24}{'结果':<8}")
     L.append(f"{'R1 名单结构':<12}{'建议 6核4辅（非硬性）':<20}{f'{cores} 核 + {supports} 辅':<24}"
              f"{'PASS' if cores == 6 and supports == 4 else 'WARN':<8}")
-    for rule, req, actual, ok in rule_rows(chosen, top2, limits):
-        L.append(f"{rule:<12}{req:<16}{actual:<24}{'PASS' if ok else 'FAIL':<8}")
+    for rule, req, actual, ok in rule_rows(chosen, top2, limits, bot2):
+        status = "WARN" if ok is None else ("PASS" if ok else "FAIL")
+        L.append(f"{rule:<12}{req:<16}{actual:<24}{status:<8}")
     if chosen_level != "严格规则 R1-R5":
         L.append(f"  注: 当前已放宽为「{chosen_level}」，原因是没有方案同时满足严格规则。")
 
     L.append("")
-    L.append("【roll 池明细（现场可核对）】")
+    L.append(f"【合格方案明细（现场可核对，共 {len(pool)} 套，满足 R6 的排在前面）】")
     for i, r in enumerate(pool, 1):
-        mark = "  <== roll 中" if r is chosen else ""
+        mark = "  <== 选中" if r is chosen else ""
         L.append(f"  {i}. 平衡 {r['score']:.1f} | 胜率 {r['pa']*100:.1f}%/{(1-r['pa'])*100:.1f}%"
                  f" | 均分 {r['ra']:.1f} vs {r['rb']:.1f}{mark}")
 
     L.append("")
     L.append("【为什么这样 roll 没问题】")
-    L.append(f"  1. roll 池里 {len(pool)} 套方案全部通过上述规则，结构、分差、胜率都在线内")
-    L.append(f"  2. 池内胜率区间 {min(x['pa'] for x in pool)*100:.1f}%–{max(x['pa'] for x in pool)*100:.1f}%，"
+    L.append(f"  1. 全部 {len(pool)} 套合格方案都通过上述规则，结构、分差、胜率都在线内")
+    L.append(f"  2. 合格方案胜率区间 {min(x['pa'] for x in pool)*100:.1f}%–{max(x['pa'] for x in pool)*100:.1f}%，"
              "抽中哪套对胜负影响可忽略")
-    L.append("  3. 随机只在合格池内均匀发生，不会偏向任何玩家或队伍")
-    L.append("  4. 名单、种子、池子明细全部留档，可复现、可审计")
+    L.append("  3. 不抽签：优先满足 R6，再按平衡分从高到低，同一名单每次结果相同")
+    L.append("  4. 名单、合格方案明细全部留档，可复现、可审计")
 
     print("\n".join(L))
     return 0

@@ -124,6 +124,9 @@ TEMPLATE = r"""<!DOCTYPE html>
   .tab { white-space:nowrap; }
   .p-rating { font-size:18px; font-weight:700; }
   .badge { display:inline-block; font-size:10px; padding:1px 6px; border-radius:999px; margin-left:5px; }
+  /* 评分/称号行：所有徽章同一高度、同一对齐线（inline-block 与 inline-flex 基线算法不同，统一用 inline-flex + 居中） */
+  .badge.mvp, .badge.svp, .badge.tag, .badge.kda { display:inline-flex; align-items:center; justify-content:center;
+    box-sizing:border-box; height:20px; line-height:1; vertical-align:middle; }
   .badge.core { color:#7ee0a1; background:#173125; }
   .badge.sup { color:#c8a5ff; background:#251c38; }
   .badge.mvp { color:#1a1200; background:#ffcc33; font-weight:700; }
@@ -145,7 +148,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     text-shadow:0 0 7px rgba(255,128,0,.65); box-shadow:0 0 8px rgba(255,128,0,.35); }
   .badge.kda-3 { color:#ff3b2a; background:#2e0a07; border:1px solid #d02414; font-weight:700;
     text-shadow:0 0 9px rgba(255,59,42,.9); box-shadow:0 0 13px rgba(255,50,30,.6); }
-  .badge.kda-3 .wing { width:23px; height:16.5px; opacity:1; filter:drop-shadow(0 0 3px rgba(255,59,42,.85)); }
+  .badge.kda-3 .wing { width:23px; height:16.5px; margin:-3px 0; opacity:1; filter:drop-shadow(0 0 3px rgba(255,59,42,.85)); }
   .badge.tag { font-weight:700; letter-spacing:1px; }
   .badge.tag-jiang { color:#b8b8b8; background:#232323; border:1px solid #555; }
   .badge.tag-ying { color:#7fd4c1; background:#0f2422; border:1px solid #2f6b5e; }
@@ -203,6 +206,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   .audit-row { display:flex; justify-content:space-between; font-size:11.5px; padding:3px 0; color:var(--muted); }
   .audit-row .ok { color:var(--accent); }
   .audit-row .no { color:var(--bad); }
+  .audit-row .warn { color:#e0b24a; }
   .why { margin-top:10px; font-size:11.5px; color:var(--muted); line-height:1.7; }
   .empty { color:var(--muted); font-size:13px; padding:18px 0; }
   .rules-box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
@@ -241,7 +245,9 @@ TEMPLATE = r"""<!DOCTYPE html>
   .scoreboard { margin-top:10px; }
   .scoreboard .m-table { min-width:1060px; }
   .scoreboard .item-chips { min-width:160px; max-width:220px; }
-  .title-cell { white-space:normal !important; min-width:132px; }
+  .title-cell { white-space:normal !important; min-width:132px; line-height:24px; }
+  .title-cell > b { display:inline-block; vertical-align:middle; margin-right:2px; }
+  .title-cell .badge { margin-top:2px; margin-bottom:2px; }
   .title-badge { display:inline-block; padding:3px 7px; margin:2px; border:1px solid #42655a; border-radius:5px; background:#203b30; color:#9ae3b7; font-size:12px; cursor:pointer; }
   .title-badge:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .title-mvp { background:#43351b; border-color:#8a6930; color:#ffe09c; font-weight:700; }
@@ -543,6 +549,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       <tr><td>R3 均分差</td><td>两队综合均分差 ≤ 10</td><td>强度接近</td></tr>
       <tr><td>R4 预测胜率</td><td>45% – 55%</td><td>按 Elo 公式计算</td></tr>
       <tr><td>R5 不堆叠</td><td>综合分前 2 名不同队</td><td>避免双强同队</td></tr>
+      <tr><td>R6 后 2 名分开</td><td>综合分最低的 2 名不同队</td><td><b>不严格规则</b>：优先满足；满足的方案不足时用其他合格方案补齐，审计记 WARN，不会因此 roll 失败</td></tr>
     </table>
     <p>若没有方案同时满足 R1–R5，按固定顺序放宽并在结果中注明：<br>
        1. 放宽 R5 → 2. 把 R3 放宽到 15 → 3. 把 R4 放宽到 40%–60%。</p>
@@ -553,9 +560,9 @@ TEMPLATE = r"""<!DOCTYPE html>
     <ol>
       <li><b>结构约束</b>：只保留两队核心数差 ≤1 的分法，按实际名单尽量均衡。</li>
       <li><b>强度硬约束</b>：均分差和预测胜率必须在线内，不达标不进池。</li>
-      <li><b>随机只在合格池内</b>：池内方案胜率几乎相同，抽中哪套对胜负影响可忽略。</li>
-      <li><b>规则审计</b>：每套结果都会列出 R2–R5 的实际值和 PASS/FAIL，现场可核对。</li>
-      <li><b>可复现</b>：网页每次 roll 的方案、池子、时间都可见；脚本版还会记录随机种子并落盘。</li>
+      <li><b>不抽签、直接排序</b>：合格方案按平衡分从高到低排序，展示前 3 套；优先满足 R6，不足时用平衡分最高的非 R6 方案依次补上。</li>
+      <li><b>规则审计</b>：每套结果都会列出 R1–R6 的实际值和 PASS / WARN / FAIL，现场可核对。</li>
+      <li><b>可复现</b>：同一名单每次得到相同的结果（不抽签）；网页版每次 roll 的方案、合格数量都可见。</li>
     </ol>
   </div>
 
@@ -1134,18 +1141,13 @@ function buildSplits(sel) {
   }
   return splits;
 }
-function shuffle(a) {
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 function roll() {
   const sel = PLAYERS.filter(p => state.selected.has(p.id));
   if (sel.length !== 10) return;
   const cores = sel.filter(p => p.role === "核心").length;
-  const top2 = new Set([...sel].sort((x, y) => y.rating - x.rating).slice(0, 2).map(p => p.id));
+  const ranked = [...sel].sort((x, y) => y.rating - x.rating);
+  const top2 = new Set(ranked.slice(0, 2).map(p => p.id));
+  const bot2 = new Set(ranked.slice(-2).map(p => p.id));   // R6：综合分最低的两名
   const all = buildSplits(sel);
 
   const levels = [
@@ -1155,7 +1157,7 @@ function roll() {
     { label: "再放宽 R4 到 40%–60%", diff: 15, lo: .40, hi: .60, stack: false },
   ];
 
-  let chosenLevel = null, valid = [];
+  let chosenLevel = null, valid = [], r6Ok = null;
   for (const lv of levels) {
     valid = all.filter(r => {
       if (Math.abs(r.ca - r.cb) > 1) return false;
@@ -1175,13 +1177,21 @@ function roll() {
     return;
   }
 
-  valid.sort((x, y) => y.score - x.score || x.diff - y.diff);
-  const pool = valid.slice(0, Math.min(10, valid.length));
-  const picks = shuffle([...pool]).slice(0, 3);
+  // R6（不严格规则）：综合分最低的两名不同队。没有随机抽取：
+  // 合格方案按平衡分从高到低排序（同分均分差小者在前），先取满足 R6 的，
+  // 不足 3 套时按平衡分从高到低依次用不满足 R6 的合格方案补上（审计里记 WARN）
+  const splitBot = r => r.a.filter(p => bot2.has(p.id)).length;
+  r6Ok = r => splitBot(r) === 1;
+  const byScore = (x, y) => y.score - x.score || x.diff - y.diff;
+  const preferred = valid.filter(r6Ok).sort(byScore);
+  const fallback = valid.filter(r => !r6Ok(r)).sort(byScore);
+  const pool = [...preferred, ...fallback];
+  const picks = pool.slice(0, 3);
 
   state.results = picks;
   state.rollPool = sel.map(p => p.id);
   state.rollTop2 = [...top2];
+  state.rollBot2 = [...bot2];
   state.rollLevel = chosenLevel;
   state.adopted = null;
   resetAI();
@@ -1189,32 +1199,43 @@ function roll() {
   const probs = pool.map(x => x.pa);
   const basis = `<div class="why" style="margin-bottom:12px">
     本次共 ${all.length} 种分法；在【${chosenLevel.label}】下合格 ${valid.length} 种；
-    roll 池取平衡分前 ${pool.length} 套，池内胜率
-    ${(Math.min(...probs) * 100).toFixed(1)}%–${(Math.max(...probs) * 100).toFixed(1)}%。
-    以下 3 套均从池内随机抽取。
+    其中满足 R6（后 2 名不同队）${preferred.length} 种；
+    展示平衡分最高的前 3 套（优先满足 R6${preferred.length < 3 ? `；满足 R6 的仅 ${preferred.length} 种，不足部分按平衡分从高到低用不满足 R6 的合格方案补上` : ""}），
+    全部合格方案胜率 ${(Math.min(...probs) * 100).toFixed(1)}%–${(Math.max(...probs) * 100).toFixed(1)}%。
   </div>`;
 
-  $("results").innerHTML = basis + picks.map((r, i) => card(r, i + 1, top2, chosenLevel)).join("");
+  $("results").innerHTML = basis + picks.map((r, i) => card(r, i + 1, top2, chosenLevel, bot2, cores)).join("");
   state.resultsHtml = $("results").innerHTML;
   updateAIAction();
 }
 function memberHtml(p) {
   return `<span class="member"><b>${esc(p.name)}</b><span>${Math.round(p.rating)}</span></span>`;
 }
-function auditRows(r, top2, lv) {
-  const a2 = r.a.filter(p => top2.has(p.id)).length;
-  const b2 = r.b.filter(p => top2.has(p.id)).length;
-  return [
-    ["R2 每队结构", "核心数差 ≤ 1", `A ${r.ca}核${5 - r.ca}辅 / B ${r.cb}核${5 - r.cb}辅`, Math.abs(r.ca - r.cb) <= 1],
-    ["R3 均分差", `≤ ${lv.diff}`, `${r.diff.toFixed(1)}`, r.diff <= lv.diff],
+function auditRows(r, top2, lv, bot2, cores) {
+  const cnt = (team, set) => team.filter(p => set.has(p.id)).length;
+  const a2 = cnt(r.a, top2), b2 = cnt(r.b, top2);
+  const rows = [];
+  // R1 名单结构：非硬门槛，不满足记 WARN。cores 未提供时（旧调用）不显示这一行
+  if (typeof cores === "number") {
+    rows.push(["R1 名单结构", "建议 6 核 + 4 辅（非硬性）", `${cores} 核 + ${10 - cores} 辅`, cores === 6 ? "PASS" : "WARN"]);
+  }
+  rows.push(
+    ["R2 每队结构", "核心数差 ≤ 1", `A ${r.ca}核${5 - r.ca}辅 / B ${r.cb}核${5 - r.cb}辅`, Math.abs(r.ca - r.cb) <= 1 ? "PASS" : "FAIL"],
+    ["R3 均分差", `≤ ${lv.diff}`, `${r.diff.toFixed(1)}`, r.diff <= lv.diff ? "PASS" : "FAIL"],
     ["R4 预测胜率", `${(lv.lo * 100).toFixed(0)}%–${(lv.hi * 100).toFixed(0)}%`,
-      `${(r.pa * 100).toFixed(1)}% / ${((1 - r.pa) * 100).toFixed(1)}%`, r.pa >= lv.lo && r.pa <= lv.hi],
-    ["R5 不堆叠", "前 2 名不同队", `A${a2} / B${b2}`, !(a2 === 2 || b2 === 2)],
-  ].map(([n, req, act, ok]) =>
-    `<div class="audit-row"><span>${n} · ${req}</span><span>${act} <span class="${ok ? "ok" : "no"}">${ok ? "PASS" : "FAIL"}</span></span></div>`
+      `${(r.pa * 100).toFixed(1)}% / ${((1 - r.pa) * 100).toFixed(1)}%`, r.pa >= lv.lo && r.pa <= lv.hi ? "PASS" : "FAIL"],
+    ["R5 不堆叠", "前 2 名不同队", `A${a2} / B${b2}`, !(a2 === 2 || b2 === 2) ? "PASS" : "FAIL"]
+  );
+  // R6 后 2 名不同队：不严格规则，不满足记 WARN；bot2 缺失（旧数据）时不显示
+  if (bot2 && bot2.size) {
+    const a6 = cnt(r.a, bot2), b6 = cnt(r.b, bot2);
+    rows.push(["R6 后 2 名分开", "后 2 名不同队（非严格）", `A${a6} / B${b6}`, a6 === 1 ? "PASS" : "WARN"]);
+  }
+  return rows.map(([n, req, act, st]) =>
+    `<div class="audit-row"><span>${n} · ${req}</span><span>${act} <span class="${st === "PASS" ? "ok" : st === "WARN" ? "warn" : "no"}">${st}</span></span></div>`
   ).join("");
 }
-function card(r, idx, top2, lv) {
+function card(r, idx, top2, lv, bot2, cores) {
   return `<div class="card">
     <div class="card-head">
       <div class="card-title">方案 ${idx}</div>
@@ -1232,9 +1253,9 @@ function card(r, idx, top2, lv) {
     </div>
     <div class="audit">
       <div class="team-label" style="margin-bottom:6px">规则审计</div>
-      ${auditRows(r, top2, lv)}
+      ${auditRows(r, top2, lv, bot2, cores)}
     </div>
-    <div class="why">依据：该方案从合格池随机抽取；各项规则及放宽情况见本卡片审计结果。</div>
+    <div class="why">依据：该方案为合格方案中平衡分靠前者；各项规则及放宽情况见本卡片审计结果。</div>
   </div>`;
 }
 
@@ -1535,11 +1556,12 @@ function handleDisplayMatch(tool) {
   const id = "m" + Date.now() + "_" + Object.keys(state.ai.cards).length;
   state.ai.cards[id] = r;
   const top2 = new Set(state.rollTop2 || []);
+  const bot2 = new Set(state.rollBot2 || []);
   const lv = state.rollLevel || { diff: 10, lo: .45, hi: .55 };
-  addMsg("assistant", matchCardHtml(r, id, inp.reason || "", top2, lv), "match-wrap");
+  addMsg("assistant", matchCardHtml(r, id, inp.reason || "", top2, lv, bot2), "match-wrap");
   return { ok: true };
 }
-function matchCardHtml(r, id, reason, top2, lv) {
+function matchCardHtml(r, id, reason, top2, lv, bot2) {
   return `<div class="match-card">
     <div class="mc-head">
       <div class="mc-title">AI 建议阵容</div>
@@ -1554,7 +1576,7 @@ function matchCardHtml(r, id, reason, top2, lv) {
       <div class="team-label">队伍 B · 核心 ${r.cb} / 酱油 ${5 - r.cb}</div>
       <div class="members">${[...r.b].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
     </div>
-    <div class="audit">${auditRows(r, top2, lv)}</div>
+    <div class="audit">${auditRows(r, top2, lv, bot2, state.rollPool.length ? state.rollPool.map(n => PLAYERS.find(p => p.id === n)).filter(p => p && p.role === "核心").length : undefined)}</div>
     ${reason ? `<div class="mc-reason">${esc(reason)}</div>` : ""}
     <div class="mc-actions">
       <button class="primary" onclick="adoptLineup('${id}')">采用此阵容</button>
