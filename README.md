@@ -79,7 +79,7 @@ replay/
 ├── json/                      # 解析结果（含 SteamID，git 忽略）
 ├── player_stats.csv / .html   # 本地汇总表（git 忽略）
 ├── manta/                     # 上游解析库（git 忽略）
-└── 六个一键 bat
+└── 两个一键 bat
 ```
 
 | 路径 | 说明 |
@@ -102,12 +102,8 @@ replay/
 | `baselines.json` | 核心 / 酱油的表现分基准值，可分别调整 |
 | `mmr.json` | 玩家 MMR 登记；未登记按默认 2000 显示 |
 | `mantatool/parse.go` | 重放解析器（Go + manta），输出 JSON |
-| `一键统计.bat` | 重新生成汇总表 |
 | `一键打开网页.bat` | 重新生成并打开网页 |
 | `一键发布到腾讯云.bat` | 生成网页并上传到腾讯云 CloudBase |
-| `一键部署AI.bat` | 部署云函数、配置 Key、更新 AI 端点 |
-| `一键同步.bat` | 补回网页上传的比赛到本地（不发布） |
-| `一键检查录像.bat` | 检查已解析比赛是否都有本地 `.dem` |
 
 ## 一键发布到腾讯云
 
@@ -136,7 +132,7 @@ replay/
 检查录像完整性：
 
 ```
-python check_dem.py            # 或双击 一键检查录像.bat
+python check_dem.py
 python check_dem.py --copy-from-d   # 把 D 盘能找回的缺失录像复制到 dem/
 ```
 
@@ -254,7 +250,7 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 部署 / 更新 AI 后端：
 
 ```
-一键部署AI.bat
+python deploy_ai.py
 ```
 
 它会从 `~/.claude/settings.json` 读取当前 DeepSeek Key，部署云函数，更新 `ai_endpoint` 并重新发布网页。真实配置写入本地的 `cloudbaserc.json`（已在 `.gitignore`）。
@@ -277,15 +273,15 @@ Roll 出结果后，页面底部会出现「交互式匹配改进」。打开后
 - 两边发布前都会重新读取云端 `state/index.json`；如果对方刚发布了新比赛，会中止并要求重试，
   避免旧数据后写入覆盖新比赛。
 - 本地发布和网页上传都只接收练习赛，并按比赛 ID 去重。
-- 只生成不发布：`一键统计.bat`、`一键打开网页.bat`；只部署 AI：`一键部署AI.bat`（它最后也会走一次 `deploy_tcb.py`）。
+- 只生成不发布：`python stats.py` / `一键打开网页.bat`；只部署 AI：`python deploy_ai.py`（它最后也会走一次 `deploy_tcb.py`）。
 
 ### 本地同步
 
 网页上传只写云端 `state/`。以下时机会自动补回本地 `json/`：
 
 - `一键发布到腾讯云.bat`：发布前同步
-- `一键统计.bat` / `一键打开网页.bat`：先生成统计，同步失败会跳过并继续
-- 手动：`python sync_cloud.py` 或 `一键同步.bat`
+- `一键打开网页.bat`：先生成统计，同步失败会跳过并继续
+- 手动：`python sync_cloud.py`
 
 同步只补本地缺失的比赛，不覆盖本地已有的原始 JSON，也不会自动发布。
 
@@ -376,7 +372,7 @@ MMR分 = 1000 + (MMR − 3000) / 30（未登记默认按 2000 计算）
 mantatool\parse.exe "D:\...\replays\905xxxxxxx.dem"
 ```
 
-然后双击 `一键统计.bat` 或 `一键发布到腾讯云.bat`。
+然后双击 `一键发布到腾讯云.bat`（或先运行 `python stats.py`）。
 
 ## 为什么 `.dem` 不进 git
 

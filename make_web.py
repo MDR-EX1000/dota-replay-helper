@@ -1706,7 +1706,7 @@ async function checkService(force) {
     return true;
   } catch (_) {
     el.className = "up-service err";
-    el.textContent = "上传服务暂时连不上；首次访问需要唤醒，请稍后再试";
+    el.textContent = "上传服务暂时不可用：可能正在唤醒，或云托管资源已隔离/额度不足；请稍后重试，持续失败请联系群主";
     return false;
   }
 }
