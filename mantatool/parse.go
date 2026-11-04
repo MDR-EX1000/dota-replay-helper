@@ -235,6 +235,56 @@ func objectiveTeam(target string) string {
 	return ""
 }
 
+func heroItemCount(h map[string]interface{}, itemClass map[int32]string) int {
+	n := 0
+	for slot := 0; slot < 6; slot++ {
+		handle, ok := asUint64(h[fmt.Sprintf("m_hItems.%04d", slot)])
+		if !ok {
+			continue
+		}
+		if _, ok := itemClass[int32(handle&0x3FFF)]; ok {
+			n++
+		}
+	}
+	return n
+}
+
+func chooseHero(pid int64, selectedHandle uint64, heroes map[int32]map[string]interface{}, heroClass, itemClass map[int32]string) (map[string]interface{}, string, int32) {
+	// PlayerResource 的选中句柄直接指向本局英雄，优先于实体属性和装备猜测。
+	// 录像里的额外英雄/幻象可能复用 m_iPlayerID，不能作为首选依据。
+	if selectedHandle != 0 {
+		idx := int32(selectedHandle & 0x3FFF)
+		if h, ok := heroes[idx]; ok {
+			if cls, ok := heroClass[idx]; ok && cls != "" {
+				return h, cls, idx
+			}
+		}
+	}
+
+	heroIdxByPlayer := map[int64][]int32{}
+	for idx, h := range heroes {
+		pid := asInt(h["m_iPlayerID"]) / 2
+		if pid >= 0 && pid < 10 {
+			heroIdxByPlayer[pid] = append(heroIdxByPlayer[pid], idx)
+		}
+	}
+	var bh map[string]interface{}
+	bc := ""
+	var bidx int32 = -1
+	best := -1
+	for _, idx := range heroIdxByPlayer[pid] {
+		h := heroes[idx]
+		score := heroItemCount(h, itemClass)*1000 + int(asInt(h["m_iCurrentLevel"]))
+		if score > best {
+			best = score
+			bh = h
+			bc = heroClass[idx]
+			bidx = idx
+		}
+	}
+	return bh, bc, bidx
+}
+
 func parse(path, outDir string, writeRaw bool) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -560,44 +610,6 @@ func parse(path, outDir string, writeRaw bool) error {
 		}
 	}
 
-	heroIdxByPlayer := map[int64][]int32{}
-	for idx, h := range heroes {
-		pid := asInt(h["m_iPlayerID"]) / 2
-		if pid >= 0 && pid < 10 {
-			heroIdxByPlayer[pid] = append(heroIdxByPlayer[pid], idx)
-		}
-	}
-	countItems := func(h map[string]interface{}) int {
-		n := 0
-		for slot := 0; slot < 6; slot++ {
-			handle, ok := asUint64(h[fmt.Sprintf("m_hItems.%04d", slot)])
-			if !ok {
-				continue
-			}
-			if _, ok := itemClass[int32(handle&0x3FFF)]; ok {
-				n++
-			}
-		}
-		return n
-	}
-	bestHero := func(pid int64) (map[string]interface{}, string, int32) {
-		var bh map[string]interface{}
-		bc := ""
-		var bidx int32 = -1
-		best := -1
-		for _, idx := range heroIdxByPlayer[pid] {
-			h := heroes[idx]
-			score := countItems(h)*1000 + int(asInt(h["m_iCurrentLevel"]))
-			if score > best {
-				best = score
-				bh = h
-				bc = heroClass[idx]
-				bidx = idx
-			}
-		}
-		return bh, bc, bidx
-	}
-
 	finalMinute := int(duration / 60)
 	for steam, st := range statsBySteam {
 		if snapshots[steam] == nil {
@@ -626,7 +638,8 @@ func parse(path, outDir string, writeRaw bool) error {
 		heroTok := ""
 		items := make([]string, 0, 6)
 		abilities := []map[string]interface{}{}
-		if h, cls, hidx := bestHero(int64(i)); h != nil {
+		selectedHandle, _ := asUint64(pr[tp+"m_hSelectedHero"])
+		if h, cls, hidx := chooseHero(int64(i), selectedHandle, heroes, heroClass, itemClass); h != nil {
 			heroName = cls
 			heroTok = heroToken(cls)
 			for slot := 0; slot < 6; slot++ {
