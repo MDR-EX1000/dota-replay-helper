@@ -17,10 +17,11 @@
                    酱油 KDA 2.4 / GPM 335 / XPM 490 / 伤害经济比 1.40
                  原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]
                  场次收缩：1000 + (原始表现−1000) × n/(n+5)
-    MMR 分     : 3000 MMR = 1000 分；每 1000 MMR 差 = 33.3 分
-                 MMR分 = 1000 + (MMR − 3000) / 30
-    综合分     : 0.4 × Elo + 0.3 × 表现分 + 0.3 × MMR分
-                 未登记 MMR 默认按 2000 计算
+    对局相对表现分: 每场按补刀分核心组(6人)/酱油组(4人)，组内 KDA/GPM/XPM/伤害经济比
+                 除以组均值后按表现分同权重合成，单场 = 1000 + 500×(比值−1)，
+                 再按场次收缩：1000 + (场均−1000) × n/(n+5)。纯对局数据，不用主观 MMR。
+    综合分     : 0.4 × Elo + 0.3 × 表现分 + 0.3 × 对局相对表现分
+                 MMR 仅作展示，不参与综合分
                  （Elo 已包含胜负信息，胜率只展示，不重复计分）
 
 分队:
@@ -111,6 +112,48 @@ def load_matches():
     return matches
 
 
+def relative_perf_scores(matches, resolver):
+    """对局相对表现分：替代主观 MMR 的第三项，纯对局数据、每场自我归一。
+
+    每场按补刀把 10 人分为核心组（两队补刀前 3，共 6 人）和酱油组（后 2，共 4 人），
+    组内把 KDA/GPM/XPM/伤害经济比分别除以组均值，再按表现分同一套权重合成：
+      R = 0.40*KDA比 + 0.15*GPM比 + 0.15*XPM比 + 0.30*伤害经济比
+      单场分 = 1000 + 500*(R-1)，截断到 [500, 1500]
+    返回 {玩家key: [单场分, ...]}，由 build_ratings 按 n/(n+5) 收缩。
+    数据不全的场次或玩家直接跳过，不把缺失当 0。
+    """
+    from player_data import metric
+    out = defaultdict(list)
+    for match in matches:
+        players = match.get("players", [])
+        groups = {"core": [], "sup": []}
+        for team in ("radiant", "dire"):
+            members = [(i, p) for i, p in enumerate(players) if p.get("team") == team]
+            if any(metric(p, "last_hits") is None or metric(p, "net_worth") is None for _, p in members):
+                members = []
+            members.sort(key=lambda ip: (-metric(ip[1], "last_hits"), -metric(ip[1], "net_worth"), ip[0]))
+            for rank, (i, p) in enumerate(members, 1):
+                groups["core" if rank <= 3 else "sup"].append((i, p))
+        for members in groups.values():
+            values = {}
+            for i, p in members:
+                k, d, a = (metric(p, f) for f in ("kills", "deaths", "assists"))
+                gpm, xpm = metric(p, "gold_per_min"), metric(p, "xp_per_min")
+                dmg, nw = metric(p, "hero_damage"), metric(p, "net_worth")
+                if None in (k, d, a, gpm, xpm, dmg, nw) or nw <= 0:
+                    continue
+                values[i] = {"kda": (k + a) / max(d, 1), "gpm": gpm, "xpm": xpm, "dmg_gold": dmg / nw}
+            if len(values) < 2:
+                continue
+            means = {f: sum(v[f] for v in values.values()) / len(values) for f in ("kda", "gpm", "xpm", "dmg_gold")}
+            for i, v in values.items():
+                ratio = sum(w * (v[f] / means[f] if means[f] > 0 else 1.0)
+                            for f, w in (("kda", .40), ("gpm", .15), ("xpm", .15), ("dmg_gold", .30)))
+                key = resolver.resolve(players[i], match, i)[0]
+                out[key].append(max(BASE - 500, min(BASE + 500, BASE + 500 * (ratio - 1))))
+    return out
+
+
 def build_ratings(matches):
     import stats
     from player_data import IdentityResolver
@@ -135,6 +178,7 @@ def build_ratings(matches):
             for key in teams[team]:
                 elo[key] += K_FACTOR * (result-probability)
     baselines = load_baselines()
+    rel_scores = relative_perf_scores(matches, resolver)
     players = {}
     for row in rows:
         key = row["_identity"]
@@ -146,13 +190,16 @@ def build_ratings(matches):
             score = (.40*(values["kda"]/b["kda"]-1) + .15*(values["gpm"]/b["gpm"]-1)
                      + .15*(values["xpm"]/b["xpm"]-1) + .30*(values["dmg_gold"]/b["dmg_gold"]-1))
             perf = max(BASE-500, min(BASE+500, BASE+500*score*row["场次"]/(row["场次"]+5)))
+        # MMR 仅保留展示，不参与综合分；第三项改为对局相对表现分
         mmr_num = row["_mmr"] if row["_mmr"] is not None else 2000
         mmr_rating = BASE+(mmr_num-3000)/30
+        samples = rel_scores.get(key, [])
+        rel = BASE if not samples else BASE + (sum(samples)/len(samples) - BASE) * len(samples)/(len(samples)+5)
         provisional = row["场次"] < 2 or not ready
-        rating = BASE if provisional else .4*elo[key]+.3*perf+.3*mmr_rating
+        rating = BASE if provisional else .4*elo[key]+.3*perf+.3*rel
         players[key] = {"id": row["_id"], "name": row["玩家"], "identity_status": row["_identity_status"],
             "elo": round(elo[key], 1), "perf": round(perf, 1), "mmr": mmr_num,
-            "mmr_rating": round(mmr_rating, 1), "rating": round(rating, 1),
+            "mmr_rating": round(mmr_rating, 1), "rel": round(rel, 1), "rating": round(rating, 1),
             "provisional": provisional, "role": row["定位"], "games": row["场次"],
             "win_rate": row["_winrate"], "gpm": row["平均GPM"], "xpm": row["平均XPM"],
             "kda": row["KDA"], "kd": row["平均K/D/A"], "samples": row["_samples"]}
