@@ -164,6 +164,37 @@ class Features(unittest.TestCase):
         del m["players"][0]["last_hits"]
         self.assertTrue(all(r["定位"] == "未定" for r in stats.aggregate([m])))
 
+    def test_relative_perf_scores_strength_and_shrinkage(self):
+        from player_data import IdentityResolver
+        m = match()
+        # player-9 全面最强，player-0 全面最弱
+        m["players"][9].update(kills=30, deaths=0, assists=20, gold_per_min=900,
+                               xp_per_min=1200, hero_damage=60000, net_worth=20000, last_hits=500)
+        m["players"][0].update(kills=0, deaths=15, assists=1, gold_per_min=150,
+                               xp_per_min=200, hero_damage=2000, net_worth=6000, last_hits=20)
+        resolver = IdentityResolver([m], {}, {})
+        scores = balance.relative_perf_scores([m], resolver)
+        key9 = resolver.resolve(m["players"][9], m, 9)[0]
+        key0 = resolver.resolve(m["players"][0], m, 0)[0]
+        self.assertGreater(scores[key9][0], scores[key0][0])
+        self.assertGreater(scores[key9][0], 1000)
+        self.assertLess(scores[key0][0], 1000)
+        # 截断范围
+        for vals in scores.values():
+            for v in vals:
+                self.assertTrue(500 <= v <= 1500)
+
+    def test_rating_no_longer_depends_on_mmr(self):
+        m = match()
+        base = balance.build_ratings([m])
+        from unittest.mock import patch as _patch
+        with _patch.object(stats, "MMR", {"player-0": 9999}):
+            high = balance.build_ratings([m])
+        for key in base:
+            self.assertAlmostEqual(base[key]["rating"], high[key]["rating"], places=6)
+        # 新增子项存在且有限
+        self.assertTrue(all("rel" in p for p in base.values()))
+
     def test_missing_net_worth_does_not_create_false_role_rank(self):
         m = match()
         del m["players"][0]["net_worth"]
