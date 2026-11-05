@@ -4,7 +4,7 @@
 
 规则 R1-R5:
     R1 名单结构   建议 6 核 + 4 辅，但不作为硬门槛（不满足记 WARN）
-    R2 每队结构   两队核心数差 ≤ 1，尽量均衡（不强制固定 3 核 2 辅）
+    R2 每队结构   两队核心数差 ≤ 1（同原规则）；全能默认当酱油，核心少的一边用核心率最高的全能补核心，能补平就补平
     R3 均分差     两队综合分均值差 ≤ 10
     R4 预测胜率   45% ≤ 胜率 ≤ 55%
     R5 不堆叠     综合分前 2 名不能在同一队
@@ -70,13 +70,18 @@ def make_split(sel, combo):
     ra = sum(p["rating"] for p in team_a) / 5
     rb = sum(p["rating"] for p in team_b) / 5
     pa = balance.expected(ra, rb)
+    fixed_a, flex_a = balance.team_structure(team_a)
+    fixed_b, flex_b = balance.team_structure(team_b)
+    ca, cb, fill_a, fill_b, r2ok = balance.assign_flex(fixed_a, flex_a, fixed_b, flex_b)
+    fill_who_a = balance.fill_players(team_a, fill_a)
+    fill_who_b = balance.fill_players(team_b, fill_b)
     return {
         "team_a": team_a, "team_b": team_b,
         "ra": ra, "rb": rb, "pa": pa,
         "diff": abs(ra - rb),
         "score": 100 * (1 - 2 * abs(pa - 0.5)),
-        "ca": sum(1 for p in team_a if p["role"] == "核心"),
-        "cb": sum(1 for p in team_b if p["role"] == "核心"),
+        "ca": ca, "cb": cb, "fill_a": fill_a, "fill_b": fill_b, "r2ok": r2ok,
+        "fill_who_a": fill_who_a, "fill_who_b": fill_who_b,
     }
 
 
@@ -89,9 +94,11 @@ def rule_rows(r, top2, limits, bot2=None):
     stack_ok = not (top2_a == 2 or top2_b == 2)
 
     rows = [
-        ("R2 每队结构", "核心数差 ≤ 1",
-         f"A {r['ca']}核{5-r['ca']}辅 / B {r['cb']}核{5-r['cb']}辅",
-         abs(r["ca"] - r["cb"]) <= 1),
+        ("R2 每队结构", "两队核心数差 ≤ 1（全能补位）",
+         f"A {r['ca']}核{5-r['ca']}辅 / B {r['cb']}核{5-r['cb']}辅"
+         + (f"（A 由 {'、'.join(r.get('fill_who_a', []))} 补核）" if r.get("fill_a") else "")
+         + (f"（B 由 {'、'.join(r.get('fill_who_b', []))} 补核）" if r.get("fill_b") else ""),
+         r.get("r2ok", True)),
         ("R3 均分差", f"≤ {limits['diff']}", f"{r['diff']:.1f}",
          r["diff"] <= limits["diff"]),
         ("R4 预测胜率", f"{limits['lo']*100:.0f}%–{limits['hi']*100:.0f}%",
@@ -131,8 +138,9 @@ def main():
         print("名单中包含重复账号，请选择 10 个不同玩家。")
         return 1
     sel = [players[n] for n in resolved]
-    cores = sum(1 for p in sel if p["role"] == "核心")
-    supports = 10 - cores
+    flex_n = sum(1 for p in sel if p.get("flex"))
+    cores = sum(1 for p in sel if p["role"] == "核心" and not p.get("flex"))
+    supports = 10 - cores - flex_n
     ranked = sorted(sel, key=lambda x: -x["rating"])
     top2 = {p["name"] for p in ranked[:2]}
     bot2 = {p["name"] for p in ranked[-2:]}
@@ -152,7 +160,7 @@ def main():
         rows = []
         for r in all_splits:
             # 不强制 6 核 4 辅；只要求两队核心数尽量均衡（差 ≤ 1）
-            if abs(r["ca"] - r["cb"]) > 1:
+            if not r.get("r2ok", True):
                 continue
             if r["diff"] > lim["diff"]:
                 continue
@@ -190,7 +198,7 @@ def main():
     L = []
     L.append("=" * 70)
     L.append(f"对黑 roll 结果    {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    L.append(f"名单: {cores} 核 + {supports} 辅    {len(all_splits)} 种分法，"
+    L.append(f"名单: {cores} 核 + {supports} 辅 + {flex_n} 全能    {len(all_splits)} 种分法，"
              f"满足【{chosen_level}】的 {qualified} 种，其中满足 R6 的 {len(ok6)} 种；"
              f"{'取其中平衡分最高者' if ok6 else '无满足 R6 的方案，取合格方案中平衡分最高者'}")
     L.append("取法: 不抽签，合格方案按平衡分排序后取第一套（--seed/--top 参数已不再生效）")
@@ -217,13 +225,17 @@ def main():
         members = "、".join(f"{p['name']}({p['rating']:.0f})"
                            for p in sorted(team, key=lambda x: -x["rating"]))
         c = sum(1 for p in team if p["role"] == "核心")
-        L.append(f"  {label} [核心{c}/酱油{5-c}]: {members}")
+        fill_n = chosen.get("fill_a" if label == "队伍A" else "fill_b", 0)
+        who = chosen.get("fill_who_a" if label == "队伍A" else "fill_who_b", [])
+        fill = f"，含{'、'.join(who)}补核" if fill_n else ""
+        L.append(f"  {label} [核心{c}/酱油{5-c}{fill}]: {members}")
 
     L.append("")
     L.append("【规则审计】")
     L.append(f"{'规则':<12}{'要求':<16}{'本次实际':<24}{'结果':<8}")
-    L.append(f"{'R1 名单结构':<12}{'建议 6核4辅（非硬性）':<20}{f'{cores} 核 + {supports} 辅':<24}"
-             f"{'PASS' if cores == 6 and supports == 4 else 'WARN':<8}")
+    roster_text = f"{cores} 核 + {supports} 辅" + (f" + {flex_n} 全能" if flex_n else "")
+    L.append(f"{'R1 名单结构':<12}{'建议 6核4辅（非硬性）':<20}{roster_text:<24}"
+             f"{'PASS' if cores <= 6 <= cores + flex_n else 'WARN':<8}")
     for rule, req, actual, ok in rule_rows(chosen, top2, limits, bot2):
         status = "WARN" if ok is None else ("PASS" if ok else "FAIL")
         L.append(f"{rule:<12}{req:<16}{actual:<24}{status:<8}")

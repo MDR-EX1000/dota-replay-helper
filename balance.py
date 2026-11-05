@@ -154,9 +154,40 @@ def build_ratings(matches):
             "elo": round(elo[key], 1), "perf": round(perf, 1), "mmr": mmr_num,
             "mmr_rating": round(mmr_rating, 1), "rating": round(rating, 1),
             "provisional": provisional, "role": row["定位"], "games": row["场次"],
+            "flex": str(row.get("定位展示", "")).startswith("全能"),
+            "core_rate": row.get("_core_rate"),
             "win_rate": row["_winrate"], "gpm": row["平均GPM"], "xpm": row["平均XPM"],
             "kda": row["KDA"], "kd": row["平均K/D/A"], "samples": row["_samples"]}
     return players
+
+
+def team_structure(team):
+    """返回 (固定核心数, 全能数)。全能（核心率 40%~60%）不固定占核心/酱油名额。"""
+    fixed = sum(1 for p in team if p["role"] == "核心" and not p.get("flex"))
+    flex = sum(1 for p in team if p.get("flex"))
+    return fixed, flex
+
+
+def assign_flex(fixed_a, flex_a, fixed_b, flex_b):
+    """R2 每队结构：有效核心数差 ≤ 1（与没有全能时的原规则一致），全能用来尽量抹平差距。
+
+    全能默认当酱油；只有固定核心少的一边用全能补核心：
+      差 d 个 -> 该边补 min(d, 本边全能数) 个，补后差仍 >1 才淘汰。
+    所以：差 0 时不补；差 1 且本边有全能就补成一致；本边全能不够时允许多保留 1 个差距。
+    返回 (A有效核心, B有效核心, A补核人数, B补核人数, 是否合格)。
+    """
+    need = fixed_b - fixed_a
+    fill_a = min(need, flex_a) if need > 0 else 0
+    fill_b = min(-need, flex_b) if need < 0 else 0
+    ca, cb = fixed_a + fill_a, fixed_b + fill_b
+    return ca, cb, fill_a, fill_b, abs(ca - cb) <= 1
+
+
+def fill_players(team, fill):
+    """补核的是谁：本队全能中核心率最高者优先（核心率相同看综合分，再按名字保证可复现）。"""
+    flex = [p for p in team if p.get("flex")]
+    flex.sort(key=lambda p: (-(p.get("core_rate") or 0), -p.get("rating", 0), p["name"]))
+    return [p["name"] for p in flex[:fill]]
 
 
 def expected(a, b):
@@ -171,9 +202,10 @@ def generate(players, top_n):
     for combo in combinations(rest, 4):
         team_a = [players[first]] + [players[n] for n in combo]
         team_b = [players[n] for n in rest if n not in combo]
-        cores_a = sum(1 for p in team_a if p["role"] == "核心")
-        cores_b = sum(1 for p in team_b if p["role"] == "核心")
-        if abs(cores_a - cores_b) > 1:
+        fixed_a, flex_a = team_structure(team_a)
+        fixed_b, flex_b = team_structure(team_b)
+        cores_a, cores_b, fill_a, fill_b, ok = assign_flex(fixed_a, flex_a, fixed_b, flex_b)
+        if not ok:
             continue
         ra = sum(p["rating"] for p in team_a) / 5
         rb = sum(p["rating"] for p in team_b) / 5

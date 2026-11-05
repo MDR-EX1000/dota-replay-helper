@@ -51,6 +51,9 @@ def collect_players(matches=None):
             "elo": p["elo"],
             "perf": p["perf"],
             "role": p["role"],
+            "roleDisplay": s.get("定位展示", p["role"]),
+            "flex": str(s.get("定位展示", "")).startswith("全能"),
+            "coreRateNum": s.get("_core_rate"),
             "provisional": p.get("provisional", False),
             "games": s.get("场次", p["games"]),
             "wins": s.get("胜", 0),
@@ -129,6 +132,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     box-sizing:border-box; height:20px; line-height:1; vertical-align:middle; }
   .badge.core { color:#7ee0a1; background:#173125; }
   .badge.sup { color:#c8a5ff; background:#251c38; }
+  .badge.swing { color:#e8c37a; background:#2a2110; }
   .badge.mvp { color:#1a1200; background:#ffcc33; font-weight:700; }
   .badge.svp { color:#0a1a2a; background:#7fc4ff; font-weight:700; }
   .award-row { display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
@@ -188,6 +192,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   tbody tr:last-child td { border-bottom:0; }
   .role-core { color:var(--accent); }
   .role-sup { color:var(--purple); }
+  .role-swing { color:var(--gold, #d8b45a); }
   .heroes { text-align:left !important; color:var(--muted); max-width:280px;
             overflow:hidden; text-overflow:ellipsis; }
   .results { display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:16px; }
@@ -544,8 +549,8 @@ TEMPLATE = r"""<!DOCTYPE html>
     <h3 style="margin-top:0">二、Roll 规则</h3>
     <table>
       <tr><th>规则</th><th>要求</th><th>说明</th></tr>
-      <tr><td>R1 名单结构</td><td>建议 6 核 + 4 辅</td><td>非硬门槛；不满足记 WARN，仍可正常 roll</td></tr>
-      <tr><td>R2 每队结构</td><td>两队核心数差 ≤ 1</td><td>按实际名单尽量均衡，不强制固定 3 核 2 辅</td></tr>
+      <tr><td>R1 名单结构</td><td>建议 6 核 + 4 辅</td><td>非硬门槛；全能可计入核心数；不满足记 WARN，仍可正常 roll</td></tr>
+      <tr><td>R2 每队结构</td><td>两队核心数差 ≤ 1</td><td>与无全能时相同。全能（核心率 40%~60%）当补位：默认算酱油；核心少的一边用全能补核心，核心率最高者优先，能补平就补平，补不齐允许保留 1 个差距，差 &gt;1 才淘汰</td></tr>
       <tr><td>R3 均分差</td><td>两队综合均分差 ≤ 10</td><td>强度接近</td></tr>
       <tr><td>R4 预测胜率</td><td>45% – 55%</td><td>按 Elo 公式计算</td></tr>
       <tr><td>R5 不堆叠</td><td>综合分前 2 名不同队</td><td>避免双强同队</td></tr>
@@ -558,7 +563,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   <div class="rules-box">
     <h3 style="margin-top:0">三、为什么这样 roll 没问题</h3>
     <ol>
-      <li><b>结构约束</b>：只保留两队核心数差 ≤1 的分法，按实际名单尽量均衡。</li>
+      <li><b>结构约束</b>：只保留两队核心数差 ≤1 的分法；全能默认当酱油，核心少的一边用核心率最高的全能补核心。</li>
       <li><b>强度硬约束</b>：均分差和预测胜率必须在线内，不达标不进池。</li>
       <li><b>不抽签、直接排序</b>：合格方案按平衡分从高到低排序，展示前 3 套；优先满足 R6，不足时用平衡分最高的非 R6 方案依次补上。</li>
       <li><b>规则审计</b>：每套结果都会列出 R1–R6 的实际值和 PASS / WARN / FAIL，现场可核对。</li>
@@ -641,8 +646,8 @@ const STAT_COLUMNS = [
   { key: "games", label: "场次", type: "num", fmt: p => p.games },
   { key: "wins", label: "胜-负", type: "num", fmt: p => `${p.wins}-${p.losses}`, get: p => p.wins },
   { key: "winRate", label: "胜率", type: "num", fmt: p => (p.winRate == null ? "暂无数据" : nfmt(p.winRate, 1) + "%") },
-  { key: "role", label: "定位", type: "str", fmt: p => p.role,
-    clsFn: p => p.role === "核心" ? "role-core" : "role-sup" },
+  { key: "role", label: "定位", type: "str", fmt: p => p.roleDisplay || p.role,
+    clsFn: p => (p.roleDisplay || p.role).startsWith("全能") ? "role-swing" : p.role === "核心" ? "role-core" : "role-sup" },
   { key: "coreRate", label: "核心率", type: "num", get: p => parseFloat(p.coreRate), fmt: p => p.coreRate },
   { key: "rankAll", label: "全场排名", type: "num", fmt: p => nfmt(p.rankAll, 2) },
   { key: "rankTeam", label: "队内排名", type: "num", fmt: p => nfmt(p.rankTeam, 2) },
@@ -1074,7 +1079,7 @@ function renderPlayers() {
       <input type="checkbox" ${state.selected.has(p.id) ? "checked" : ""} data-player-id="${esc(p.id)}">
       <div class="p-main">
         <div class="p-name">${playerAvatar(p)}${esc(p.name)}
-          <span class="badge ${p.role === "核心" ? "core" : "sup"}">${p.role}</span>
+          <span class="badge ${(p.roleDisplay || p.role).startsWith("全能") ? "swing" : p.role === "核心" ? "core" : "sup"}">${p.roleDisplay || p.role}</span>
           ${p.provisional ? '<span class="badge prov">暂定</span>' : ""}
         </div>
         <div class="p-meta">${p.games} 场 · 胜率 ${p.winRate == null ? "暂无数据" : nfmt(p.winRate, 1) + "%"} · KDA ${nfmt(p.kda, 2)} · GPM ${nfmt(p.gpm)}</div>
@@ -1134,9 +1139,23 @@ function buildSplits(sel) {
     const ra = a.reduce((s, p) => s + p.rating, 0) / 5;
     const rb = b.reduce((s, p) => s + p.rating, 0) / 5;
     const pa = expected(ra, rb);
-    const ca = a.filter(p => p.role === "核心").length;
-    const cb = b.filter(p => p.role === "核心").length;
-    splits.push({ a, b, ra, rb, pa, ca, cb, diff: Math.abs(ra - rb),
+    // R2 补位：全能默认当酱油，仅核心少的一边用全能补核心，补到两边一致
+    const fixed = t => t.filter(p => p.role === "核心" && !p.flex).length;
+    const flexN = t => t.filter(p => p.flex).length;
+    const fa = fixed(a), fb = fixed(b), fla = flexN(a), flb = flexN(b);
+    // R2：有效核心数差 ≤ 1（与原规则一致）。全能默认当酱油，
+    // 仅核心少的一边用全能补核心，补 min(差值, 本边全能数) 个，补后差仍 >1 才淘汰
+    const need = fb - fa;
+    const fillA = need > 0 ? Math.min(need, fla) : 0;
+    const fillB = need < 0 ? Math.min(-need, flb) : 0;
+    const ca = fa + fillA, cb = fb + fillB;
+    const r2ok = Math.abs(ca - cb) <= 1;
+    // 补核优先让核心率最高的全能来补（核心率相同看综合分，再按 id 保证可复现）
+    const fillWho = (team, n) => team.filter(p => p.flex)
+      .sort((x, y) => (y.coreRateNum || 0) - (x.coreRateNum || 0) || y.rating - x.rating || x.id.localeCompare(y.id))
+      .slice(0, n).map(p => p.name);
+    splits.push({ a, b, ra, rb, pa, ca, cb, fillA, fillB, r2ok,
+      fillWhoA: fillWho(a, fillA), fillWhoB: fillWho(b, fillB), diff: Math.abs(ra - rb),
       score: 100 * (1 - 2 * Math.abs(pa - 0.5)) });
   }
   return splits;
@@ -1144,7 +1163,8 @@ function buildSplits(sel) {
 function roll() {
   const sel = PLAYERS.filter(p => state.selected.has(p.id));
   if (sel.length !== 10) return;
-  const cores = sel.filter(p => p.role === "核心").length;
+  const flexCount = sel.filter(p => p.flex).length;
+  const cores = sel.filter(p => p.role === "核心" && !p.flex).length;  // 固定核心（不含全能）
   const ranked = [...sel].sort((x, y) => y.rating - x.rating);
   const top2 = new Set(ranked.slice(0, 2).map(p => p.id));
   const bot2 = new Set(ranked.slice(-2).map(p => p.id));   // R6：综合分最低的两名
@@ -1160,7 +1180,7 @@ function roll() {
   let chosenLevel = null, valid = [], r6Ok = null;
   for (const lv of levels) {
     valid = all.filter(r => {
-      if (Math.abs(r.ca - r.cb) > 1) return false;
+      if (!r.r2ok) return false;
       if (r.diff > lv.diff) return false;
       if (r.pa < lv.lo || r.pa > lv.hi) return false;
       const a2 = r.a.filter(p => top2.has(p.id)).length;
@@ -1171,7 +1191,7 @@ function roll() {
     if (valid.length) { chosenLevel = lv; break; }
   }
   if (!valid.length) {
-    $("results").innerHTML = `<div class="empty">没有满足最低规则的方案。当前名单是 ${cores} 核 + ${10 - cores} 辅，请调整名单或检查数据。</div>`;
+    $("results").innerHTML = `<div class="empty">没有满足最低规则的方案。当前名单是 ${cores} 核 + ${10 - cores - flexCount} 辅 + ${flexCount} 全能，请调整名单或检查数据。</div>`;
     state.results = [];
     updateAIAction();
     return;
@@ -1204,23 +1224,28 @@ function roll() {
     全部合格方案胜率 ${(Math.min(...probs) * 100).toFixed(1)}%–${(Math.max(...probs) * 100).toFixed(1)}%。
   </div>`;
 
-  $("results").innerHTML = basis + picks.map((r, i) => card(r, i + 1, top2, chosenLevel, bot2, cores)).join("");
+  $("results").innerHTML = basis + picks.map((r, i) => card(r, i + 1, top2, chosenLevel, bot2, cores, flexCount)).join("");
   state.resultsHtml = $("results").innerHTML;
   updateAIAction();
 }
 function memberHtml(p) {
   return `<span class="member"><b>${esc(p.name)}</b><span>${Math.round(p.rating)}</span></span>`;
 }
-function auditRows(r, top2, lv, bot2, cores) {
+function auditRows(r, top2, lv, bot2, cores, flexCount) {
   const cnt = (team, set) => team.filter(p => set.has(p.id)).length;
   const a2 = cnt(r.a, top2), b2 = cnt(r.b, top2);
   const rows = [];
   // R1 名单结构：非硬门槛，不满足记 WARN。cores 未提供时（旧调用）不显示这一行
   if (typeof cores === "number") {
-    rows.push(["R1 名单结构", "建议 6 核 + 4 辅（非硬性）", `${cores} 核 + ${10 - cores} 辅`, cores === 6 ? "PASS" : "WARN"]);
+    rows.push(["R1 名单结构", "建议 6 核 + 4 辅（非硬性）", `${cores} 核 + ${10 - cores - (flexCount || 0)} 辅${flexCount ? ` + ${flexCount} 全能` : ""}`,
+      cores <= 6 && cores + (flexCount || 0) >= 6 ? "PASS" : "WARN"]);
   }
   rows.push(
-    ["R2 每队结构", "核心数差 ≤ 1", `A ${r.ca}核${5 - r.ca}辅 / B ${r.cb}核${5 - r.cb}辅`, Math.abs(r.ca - r.cb) <= 1 ? "PASS" : "FAIL"],
+    ["R2 每队结构", "两队核心数差 ≤ 1（全能补位）",
+      `A ${r.ca}核${5 - r.ca}辅 / B ${r.cb}核${5 - r.cb}辅` +
+      (r.fillA ? `（A 由 ${r.fillWhoA.join("、")} 补核）` : "") +
+      (r.fillB ? `（B 由 ${r.fillWhoB.join("、")} 补核）` : ""),
+      r.r2ok !== false ? "PASS" : "FAIL"],
     ["R3 均分差", `≤ ${lv.diff}`, `${r.diff.toFixed(1)}`, r.diff <= lv.diff ? "PASS" : "FAIL"],
     ["R4 预测胜率", `${(lv.lo * 100).toFixed(0)}%–${(lv.hi * 100).toFixed(0)}%`,
       `${(r.pa * 100).toFixed(1)}% / ${((1 - r.pa) * 100).toFixed(1)}%`, r.pa >= lv.lo && r.pa <= lv.hi ? "PASS" : "FAIL"],
@@ -1235,7 +1260,7 @@ function auditRows(r, top2, lv, bot2, cores) {
     `<div class="audit-row"><span>${n} · ${req}</span><span>${act} <span class="${st === "PASS" ? "ok" : st === "WARN" ? "warn" : "no"}">${st}</span></span></div>`
   ).join("");
 }
-function card(r, idx, top2, lv, bot2, cores) {
+function card(r, idx, top2, lv, bot2, cores, flexCount) {
   return `<div class="card">
     <div class="card-head">
       <div class="card-title">方案 ${idx}</div>
@@ -1244,16 +1269,16 @@ function card(r, idx, top2, lv, bot2, cores) {
       </div>
     </div>
     <div class="team">
-      <div class="team-label">队伍 A · 核心 ${r.ca} / 酱油 ${5 - r.ca}</div>
+      <div class="team-label">队伍 A · 核心 ${r.ca} / 酱油 ${5 - r.ca}${r.fillA ? `（含 ${r.fillA} 全能补核）` : ""}</div>
       <div class="members">${[...r.a].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
     </div>
     <div class="team">
-      <div class="team-label">队伍 B · 核心 ${r.cb} / 酱油 ${5 - r.cb}</div>
+      <div class="team-label">队伍 B · 核心 ${r.cb} / 酱油 ${5 - r.cb}${r.fillB ? `（含 ${r.fillB} 全能补核）` : ""}</div>
       <div class="members">${[...r.b].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
     </div>
     <div class="audit">
       <div class="team-label" style="margin-bottom:6px">规则审计</div>
-      ${auditRows(r, top2, lv, bot2, cores)}
+      ${auditRows(r, top2, lv, bot2, cores, flexCount)}
     </div>
     <div class="why">依据：该方案为合格方案中平衡分靠前者；各项规则及放宽情况见本卡片审计结果。</div>
   </div>`;
@@ -1569,14 +1594,16 @@ function matchCardHtml(r, id, reason, top2, lv, bot2) {
         平衡分 ${r.score.toFixed(1)} · 均分 ${r.ra.toFixed(1)} vs ${r.rb.toFixed(1)}</div>
     </div>
     <div class="mc-team">
-      <div class="team-label">队伍 A · 核心 ${r.ca} / 酱油 ${5 - r.ca}</div>
+      <div class="team-label">队伍 A · 核心 ${r.ca} / 酱油 ${5 - r.ca}${r.fillA ? `（含 ${r.fillA} 全能补核）` : ""}</div>
       <div class="members">${[...r.a].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
     </div>
     <div class="mc-team">
-      <div class="team-label">队伍 B · 核心 ${r.cb} / 酱油 ${5 - r.cb}</div>
+      <div class="team-label">队伍 B · 核心 ${r.cb} / 酱油 ${5 - r.cb}${r.fillB ? `（含 ${r.fillB} 全能补核）` : ""}</div>
       <div class="members">${[...r.b].sort((x, y) => y.rating - x.rating).map(memberHtml).join("")}</div>
     </div>
-    <div class="audit">${auditRows(r, top2, lv, bot2, state.rollPool.length ? state.rollPool.map(n => PLAYERS.find(p => p.id === n)).filter(p => p && p.role === "核心").length : undefined)}</div>
+    <div class="audit">${auditRows(r, top2, lv, bot2,
+      state.rollPool.length ? state.rollPool.map(n => PLAYERS.find(p => p.id === n)).filter(p => p && p.role === "核心" && !p.flex).length : undefined,
+      state.rollPool.length ? state.rollPool.map(n => PLAYERS.find(p => p.id === n)).filter(p => p && p.flex).length : 0)}</div>
     ${reason ? `<div class="mc-reason">${esc(reason)}</div>` : ""}
     <div class="mc-actions">
       <button class="primary" onclick="adoptLineup('${id}')">采用此阵容</button>

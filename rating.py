@@ -22,11 +22,13 @@ BASE = {
     "death": (0.20, 0.20),
 }
 # 权重按定位分两套，各自和为 1.0。本位不负责的指标权重为 0（不奖不罚）：
-# 核心不要求插眼/治疗/控制；辅助不要求推塔/经济。
-W_CORE = {"dmg": 0.28, "part": 0.22, "eco": 0.12, "tower": 0.08,
-          "tank": 0.10, "stun": 0.10, "suputil": 0.00, "live": 0.10}
-W_SUP = {"dmg": 0.15, "part": 0.30, "eco": 0.00, "tower": 0.00,
-         "tank": 0.10, "stun": 0.10, "suputil": 0.15, "live": 0.20}
+# 核心不要求插眼/治疗；辅助不要求推塔/经济。
+# 核心强调输出、参战、经济和推塔；辅助强调参战和通用辅助贡献。
+# 双方降低裸承伤权重，避免奖励无效挨打；辅助降低存活权重，避免惩罚必要牺牲。
+W_CORE = {"dmg": 0.30, "part": 0.25, "eco": 0.15, "tower": 0.10,
+          "tank": 0.05, "stun": 0.05, "suputil": 0.00, "live": 0.10}
+W_SUP = {"dmg": 0.10, "part": 0.35, "eco": 0.00, "tower": 0.00,
+         "tank": 0.05, "stun": 0.10, "suputil": 0.25, "live": 0.15}
 assert all(abs(3 * c + 2 * s - 1) < 1e-9 for c, s in BASE.values())
 assert abs(sum(W_CORE.values()) - 1) < 1e-9 and abs(sum(W_SUP.values()) - 1) < 1e-9
 BASE_FLOOR = 0.08   # 基线下限，防止低基线项(核心的眼/治疗)比值被放大
@@ -68,15 +70,20 @@ def rate_players(players, winner):
             i = 0 if rank < 3 else 1
             r = lambda key, v, tot: _ratio(v, tot, BASE[key][i])
             dmg = r("dmg", p["hero_damage"], T("hero_damage"))
-            part = r("part", p["kills"] + 0.7 * p["assists"],
-                     T("kills") + 0.7 * T("assists"))
+            # 核心击杀权重更高；辅助采用标准参战口径，不降低助攻价值。
+            assist_weight = 0.7 if i == 0 else 1.0
+            part = r("part", p["kills"] + assist_weight * p["assists"],
+                     T("kills") + assist_weight * T("assists"))
             eco = r("eco", p["net_worth"], T("net_worth"))
             tower = r("tower", p["tower_damage"], T("tower_damage"))
             tank = r("tank", p["hero_damage_taken"], T("hero_damage_taken"))
             stun = r("stun", p["stuns"], T("stuns"))
-            suputil = (0.5 * r("heal", p["healing"], T("healing"))
-                       + 0.5 * r("ward", p["wards_placed"] + p["wards_destroyed"],
-                                 T("wards_placed") + T("wards_destroyed")))
+            ward = r("ward", p["wards_placed"] + p["wards_destroyed"],
+                     T("wards_placed") + T("wards_destroyed"))
+            # 不识别英雄技能：视野是所有辅助都能做的基础项；治疗只在超过
+            # 典型水平时提供增量，无治疗或低治疗都不会反过来拉低辅助功能分。
+            heal = r("heal", p["healing"], T("healing")) if T("healing") > 0 else 0.0
+            suputil = max(ward, 0.5 * heal + 0.5 * ward)
             # 存活：死亡比典型越少越好，0 死=2.0，典型=1.0，两倍典型=0
             live = 2.0 - r("death", p["deaths"], T("deaths")) if T("deaths") else 1.0
             W = W_CORE if i == 0 else W_SUP
@@ -93,6 +100,38 @@ def rate_players(players, winner):
         cap = 10.0 if p["team"] == winner else 9.9
         res[p["pid"]] = round(max(0.0, min(cap, 6.0 + (out[p["pid"]] - 1.0) * SCALE * 2.5)), 1)
     return res
+
+
+def rule_lines():
+    """页面展示规则；权重和分数尺度直接取常量，避免说明与实现脱节。"""
+    labels = (("dmg", "输出"), ("part", "参战"), ("eco", "经济"),
+              ("tower", "推塔"), ("tank", "承伤"), ("stun", "控制"),
+              ("suputil", "辅助功能"), ("live", "存活"))
+    def weights(w):
+        return "、".join(f"{name}{round(w[key] * 100):d}%" for key, name in labels if w[key])
+    base = "、".join(f"{name}{BASE[key][0] * 100:g}%/{BASE[key][1] * 100:g}%"
+                     for key, name in (("dmg", "输出"), ("part", "参战"), ("eco", "经济"),
+                                      ("tower", "推塔"), ("tank", "承伤"),
+                                      ("stun", "控制"), ("heal", "治疗"), ("ward", "视野")))
+    return [
+        "单局评分（0–10）：每队按补刀排名，前 3 为核心、后 2 为辅助（补刀相同比净资产）。"
+        "指标先算本人占本队总量的份额，再除以本位置典型份额；单项比值上限为 2。核心指标缺失时不评分。",
+        f"核心权重：{weights(W_CORE)}。辅助权重：{weights(W_SUP)}。",
+        "核心参战 = 击杀 + 0.7×助攻；辅助参战 = 击杀 + 助攻。辅助功能以视野为基础，"
+        "治疗只奖励高于典型水平的部分，无治疗或低治疗不扣分。",
+        f"位置典型份额（核心/辅助）：{base}；死亡双方均为 20%。",
+        f"单局分 = 6 + (加权比值−1)×{SCALE * 2.5:g}，截断到 0–10；败方封顶 9.9。"
+        "MVP/SVP 分别为胜方/败方最高分，同分依次比较 KDA、击杀+助攻、比赛内编号。",
+        "虽败犹荣：败方评分 ≥ 8.0 且 KDA ≥ 1.5，可多人获得。",
+        "秀系列按 K/D（击杀/死亡，死亡最低按 1）：秀 ≥ 10、天秀 ≥ 15、天之上需 K/D ≥ 15 且 0 死亡，互斥。",
+        "敌塔师：推塔伤害占本队 ≥ 60%、推塔伤害 ≥ 8000 且亲手拆塔 ≥ 3。"
+        "光明左使：插假眼 ≥ 15 且全场最多；光明右使：排眼 ≥ 12，按排眼×2+真眼数取最高；左右同人合并为光明使者。",
+        "瘤：经济份额 ≥ 1.3、参战份额 ≤ 0.6 且评分 ≤ 5.0；"
+        "莽：参战份额 ≥ 1.2、死亡 ≥ 8、死亡份额 ≥ 1.3 且评分 ≤ 7.0；"
+        "僵：死亡 ≥ 10、死亡份额 ≥ 1.6 且评分 ≤ 4.5；硬：承伤份额 ≥ 1.4、死亡份额 ≤ 1.2 且评分 ≤ 7.5。",
+        "搞子（败方）/躺了（胜方）：核心输出比 ≤ 0.5 或辅助功能比 ≤ 0.4，评分 ≤ 3.5 且本队垫底；"
+        "躺了另需参战份额 ≤ 0.8、控制比和承伤比均 < 0.8。特色称号每场各最多一人。",
+    ]
 
 
 def apply(players, winner, objectives=None):
