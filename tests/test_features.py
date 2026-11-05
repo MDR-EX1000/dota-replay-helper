@@ -221,6 +221,11 @@ class Features(unittest.TestCase):
         a = make_match_data.transform_match(quiet)["players"][0]
         b = make_match_data.transform_match(healed)["players"][0]
         self.assertAlmostEqual(a["score"], b["score"])
+        # 治疗贡献必须单调：从 0 变成少量治疗，不能把分数反而降低。
+        slightly_healed = copy.deepcopy(healed)
+        slightly_healed["players"][0]["hero_healing"] = 1
+        c = make_match_data.transform_match(slightly_healed)["players"][0]
+        self.assertGreaterEqual(c["score"], b["score"])
 
     def test_missing_winner_kill_prevents_false_kill_title_and_score(self):
         m = match()

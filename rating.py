@@ -80,9 +80,10 @@ def rate_players(players, winner):
             stun = r("stun", p["stuns"], T("stuns"))
             ward = r("ward", p["wards_placed"] + p["wards_destroyed"],
                      T("wards_placed") + T("wards_destroyed"))
-            # 不识别英雄技能：本场没有治疗时只看通用的视野贡献，
-            # 避免无治疗英雄因其他英雄有治疗而稳定失分。
-            suputil = ward if p["healing"] == 0 else 0.5 * r("heal", p["healing"], T("healing")) + 0.5 * ward
+            # 不识别英雄技能：视野是所有辅助都能做的基础项；治疗只在超过
+            # 典型水平时提供增量，无治疗或低治疗都不会反过来拉低辅助功能分。
+            heal = r("heal", p["healing"], T("healing")) if T("healing") > 0 else 0.0
+            suputil = max(ward, 0.5 * heal + 0.5 * ward)
             # 存活：死亡比典型越少越好，0 死=2.0，典型=1.0，两倍典型=0
             live = 2.0 - r("death", p["deaths"], T("deaths")) if T("deaths") else 1.0
             W = W_CORE if i == 0 else W_SUP
