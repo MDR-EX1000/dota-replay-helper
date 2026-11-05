@@ -208,6 +208,20 @@ class Features(unittest.TestCase):
         self.assertEqual(public["players"][0]["title"], "")
         self.assertTrue(any(t["key"] == "wealth" for p in public["players"] for t in p["titles"]))
 
+    def test_support_without_healing_is_not_penalized_by_teammate_healing(self):
+        import rating
+        self.assertAlmostEqual(sum(rating.W_CORE.values()), 1.0)
+        self.assertAlmostEqual(sum(rating.W_SUP.values()), 1.0)
+        quiet = match()
+        healed = match()
+        for p in quiet["players"] + healed["players"]:
+            p["hero_healing"] = 0
+        # player-0 是本队补刀/净资产排名后的辅助；队友治疗不应改变他的辅助功能得分。
+        healed["players"][4]["hero_healing"] = 1000
+        a = make_match_data.transform_match(quiet)["players"][0]
+        b = make_match_data.transform_match(healed)["players"][0]
+        self.assertAlmostEqual(a["score"], b["score"])
+
     def test_missing_winner_kill_prevents_false_kill_title_and_score(self):
         m = match()
         m["players"][0]["kills"] = None

@@ -22,11 +22,13 @@ BASE = {
     "death": (0.20, 0.20),
 }
 # 权重按定位分两套，各自和为 1.0。本位不负责的指标权重为 0（不奖不罚）：
-# 核心不要求插眼/治疗/控制；辅助不要求推塔/经济。
-W_CORE = {"dmg": 0.28, "part": 0.22, "eco": 0.12, "tower": 0.08,
-          "tank": 0.10, "stun": 0.10, "suputil": 0.00, "live": 0.10}
-W_SUP = {"dmg": 0.15, "part": 0.30, "eco": 0.00, "tower": 0.00,
-         "tank": 0.10, "stun": 0.10, "suputil": 0.15, "live": 0.20}
+# 核心不要求插眼/治疗；辅助不要求推塔/经济。
+# 核心强调输出、参战、经济和推塔；辅助强调参战和通用辅助贡献。
+# 双方降低裸承伤权重，避免奖励无效挨打；辅助降低存活权重，避免惩罚必要牺牲。
+W_CORE = {"dmg": 0.30, "part": 0.25, "eco": 0.15, "tower": 0.10,
+          "tank": 0.05, "stun": 0.05, "suputil": 0.00, "live": 0.10}
+W_SUP = {"dmg": 0.10, "part": 0.35, "eco": 0.00, "tower": 0.00,
+         "tank": 0.05, "stun": 0.10, "suputil": 0.25, "live": 0.15}
 assert all(abs(3 * c + 2 * s - 1) < 1e-9 for c, s in BASE.values())
 assert abs(sum(W_CORE.values()) - 1) < 1e-9 and abs(sum(W_SUP.values()) - 1) < 1e-9
 BASE_FLOOR = 0.08   # 基线下限，防止低基线项(核心的眼/治疗)比值被放大
@@ -68,15 +70,19 @@ def rate_players(players, winner):
             i = 0 if rank < 3 else 1
             r = lambda key, v, tot: _ratio(v, tot, BASE[key][i])
             dmg = r("dmg", p["hero_damage"], T("hero_damage"))
-            part = r("part", p["kills"] + 0.7 * p["assists"],
-                     T("kills") + 0.7 * T("assists"))
+            # 核心击杀权重更高；辅助采用标准参战口径，不降低助攻价值。
+            assist_weight = 0.7 if i == 0 else 1.0
+            part = r("part", p["kills"] + assist_weight * p["assists"],
+                     T("kills") + assist_weight * T("assists"))
             eco = r("eco", p["net_worth"], T("net_worth"))
             tower = r("tower", p["tower_damage"], T("tower_damage"))
             tank = r("tank", p["hero_damage_taken"], T("hero_damage_taken"))
             stun = r("stun", p["stuns"], T("stuns"))
-            suputil = (0.5 * r("heal", p["healing"], T("healing"))
-                       + 0.5 * r("ward", p["wards_placed"] + p["wards_destroyed"],
-                                 T("wards_placed") + T("wards_destroyed")))
+            ward = r("ward", p["wards_placed"] + p["wards_destroyed"],
+                     T("wards_placed") + T("wards_destroyed"))
+            # 不识别英雄技能：本场没有治疗时只看通用的视野贡献，
+            # 避免无治疗英雄因其他英雄有治疗而稳定失分。
+            suputil = ward if p["healing"] == 0 else 0.5 * r("heal", p["healing"], T("healing")) + 0.5 * ward
             # 存活：死亡比典型越少越好，0 死=2.0，典型=1.0，两倍典型=0
             live = 2.0 - r("death", p["deaths"], T("deaths")) if T("deaths") else 1.0
             W = W_CORE if i == 0 else W_SUP
