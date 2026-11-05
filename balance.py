@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-5v5 对黑分队器：用 Elo + 对局相对表现分给 10 人分两队，枚举所有组合并按平衡度排序。
+5v5 对黑分队器：用 Elo + 表现分给 10 人分两队，枚举所有组合并按平衡度排序。
 
 用法:
     python balance.py                          # 只显示当前评分
@@ -9,10 +9,18 @@
 
 评分:
     Elo        : 初始 1000，K=32，按比赛时间顺序逐场更新
+    表现分     : 绝对数值 + 位置基准，不做百分位排名。
+                 核心/酱油统一权重：
+                   KDA 40% / GPM 15% / XPM 15% / 伤害-经济比 30%
+                 位置基准：
+                   核心 KDA 3.7 / GPM 540 / XPM 720 / 伤害经济比 1.59
+                   酱油 KDA 2.4 / GPM 335 / XPM 490 / 伤害经济比 1.40
+                 原始表现 = 1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]
+                 场次收缩：1000 + (原始表现−1000) × n/(n+5)
     对局相对表现分: 每场按补刀分核心组(6人)/酱油组(4人)，组内 KDA/GPM/XPM/伤害经济比
-                 除以组均值后按 KDA 40%/GPM 15%/XPM 15%/伤害经济 30% 合成，单场 = 1000 + 500×(比值−1)，
+                 除以组均值后按表现分同权重合成，单场 = 1000 + 500×(比值−1)，
                  再按场次收缩：1000 + (场均−1000) × n/(n+5)。纯对局数据，不用主观 MMR。
-    综合分     : 0.4 × Elo + 0.6 × 对局相对表现分
+    综合分     : 0.4 × Elo + 0.4 × 表现分 + 0.2 × 对局相对表现分
                  MMR 仅作展示，不参与综合分
                  （Elo 已包含胜负信息，胜率只展示，不重复计分）
 
@@ -37,6 +45,33 @@ MATCHES_DIR = os.path.join(SCRIPT_DIR, "json")
 K_FACTOR = 32
 BASE = 1000.0
 START_ELO = BASE
+
+
+DEFAULT_BASELINES = {
+    "核心": {"kda": 3.7, "gpm": 540.0, "xpm": 720.0, "dmg_gold": 1.59},
+    "酱油": {"kda": 2.4, "gpm": 335.0, "xpm": 490.0, "dmg_gold": 1.40},
+}
+
+
+def load_baselines():
+    """读取 baselines.json；缺失或格式错误时使用默认值。"""
+    path = os.path.join(SCRIPT_DIR, "baselines.json")
+    if not os.path.isfile(path):
+        return DEFAULT_BASELINES
+    try:
+        with open(path, encoding="utf-8") as fp:
+            data = json.load(fp)
+        result = {}
+        for role, default in DEFAULT_BASELINES.items():
+            row = data.get(role, {})
+            result[role] = {}
+            for key, dv in default.items():
+                v = row.get(key, dv)
+                result[role][key] = float(v) if float(v) > 0 else dv
+        return result
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        print(f"[警告] baselines.json 读取失败，使用默认基准: {exc}")
+        return DEFAULT_BASELINES
 
 
 def load_mmr():
@@ -78,10 +113,10 @@ def load_matches():
 
 
 def relative_perf_scores(matches, resolver):
-    """对局相对表现分：综合分的个人表现项，纯对局数据、每场自我归一。
+    """对局相对表现分：替代主观 MMR 的第三项，纯对局数据、每场自我归一。
 
     每场按补刀把 10 人分为核心组（两队补刀前 3，共 6 人）和酱油组（后 2，共 4 人），
-    组内把 KDA/GPM/XPM/伤害经济比分别除以组均值，再按 KDA 40%/GPM 15%/XPM 15%/伤害经济 30% 合成：
+    组内把 KDA/GPM/XPM/伤害经济比分别除以组均值，再按表现分同一套权重合成：
       R = 0.40*KDA比 + 0.15*GPM比 + 0.15*XPM比 + 0.30*伤害经济比
       单场分 = 1000 + 500*(R-1)，截断到 [500, 1500]
     返回 {玩家key: [单场分, ...]}，由 build_ratings 按 n/(n+5) 收缩。
@@ -142,20 +177,28 @@ def build_ratings(matches):
                                            ("dire", float(not match["radiant_win"]), 1-ea)):
             for key in teams[team]:
                 elo[key] += K_FACTOR * (result-probability)
+    baselines = load_baselines()
     rel_scores = relative_perf_scores(matches, resolver)
     players = {}
     for row in rows:
         key = row["_identity"]
         ready = row["_rating_ready"]
-        # MMR 仅保留展示，不参与综合分；个人表现项为对局相对表现分
+        perf = BASE
+        if ready:
+            b = baselines[row["定位"]]
+            values = row["_rating_inputs"]
+            score = (.40*(values["kda"]/b["kda"]-1) + .15*(values["gpm"]/b["gpm"]-1)
+                     + .15*(values["xpm"]/b["xpm"]-1) + .30*(values["dmg_gold"]/b["dmg_gold"]-1))
+            perf = max(BASE-500, min(BASE+500, BASE+500*score*row["场次"]/(row["场次"]+5)))
+        # MMR 仅保留展示，不参与综合分；第三项改为对局相对表现分
         mmr_num = row["_mmr"] if row["_mmr"] is not None else 2000
         mmr_rating = BASE+(mmr_num-3000)/30
         samples = rel_scores.get(key, [])
         rel = BASE if not samples else BASE + (sum(samples)/len(samples) - BASE) * len(samples)/(len(samples)+5)
         provisional = row["场次"] < 2 or not ready
-        rating = BASE if provisional else .4*elo[key]+.6*rel
+        rating = BASE if provisional else .4*elo[key]+.4*perf+.2*rel
         players[key] = {"id": row["_id"], "name": row["玩家"], "identity_status": row["_identity_status"],
-            "elo": round(elo[key], 1), "mmr": mmr_num,
+            "elo": round(elo[key], 1), "perf": round(perf, 1), "mmr": mmr_num,
             "mmr_rating": round(mmr_rating, 1), "rel": round(rel, 1), "rating": round(rating, 1),
             "provisional": provisional, "role": row["定位"], "games": row["场次"],
             "win_rate": row["_winrate"], "gpm": row["平均GPM"], "xpm": row["平均XPM"],
@@ -193,12 +236,12 @@ def generate(players, top_n):
 
 
 def print_ratings(players):
-    print(f"{'玩家':<18}{'综合':>7}{'Elo':>7}{'相对表现':>9}{'MMR':>6}{'定位':>6}{'场次':>5}"
+    print(f"{'玩家':<18}{'综合':>7}{'Elo':>7}{'表现':>7}{'MMR':>6}{'定位':>6}{'场次':>5}"
           f"{'胜率':>8}{'KDA':>7}{'平均K/D/A':>18}{'GPM':>7}{'XPM':>7}")
     print("-" * 115)
     for p in sorted(players.values(), key=lambda x: -x["rating"]):
         mark = "*" if p.get("provisional") else ""
-        print(f"{p['name'][:16] + mark:<18}{p['rating']:>7.1f}{p['elo']:>7.1f}{p['rel']:>9.1f}"
+        print(f"{p['name'][:16] + mark:<18}{p['rating']:>7.1f}{p['elo']:>7.1f}{p['perf']:>7.1f}"
               f"{str(p['mmr']):>6}{p['role']:>6}{p['games']:>5}{p['win_rate']*100:>7.1f}%"
               f"{str(p['kda'] if p['kda'] is not None else '-'):>7}{p['kd']:>18}{str(p['gpm']):>7}{str(p['xpm']):>7}")
     if any(p.get("provisional") for p in players.values()):
