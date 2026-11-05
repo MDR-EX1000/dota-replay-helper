@@ -95,16 +95,56 @@ def ranks(match):
     return result
 
 
+def role_ranks(match):
+    """定位依据：队内补刀排名（1=补刀最多），补刀相同用净资产打破平局。
+
+    净资产包含击杀/助攻/推塔等收入，参战多的辅助可能超过核心，不代表位置；
+    补刀只反映占资源发育，与核心/辅助的定义直接对应，且与 rating.py 单局评分口径一致。
+    数据不完整时不排名，避免把缺失当成 0。
+    """
+    players = match.get("players", [])
+    if any(metric(p, "last_hits") is None or metric(p, "net_worth") is None for p in players):
+        return {}
+    result = {}
+    for team in ("radiant", "dire"):
+        indices = [i for i, p in enumerate(players) if p.get("team") == team]
+        ordered = sorted(indices, key=lambda i: (-metric(players[i], "last_hits"),
+                                                 -metric(players[i], "net_worth"), i))
+        for rank, i in enumerate(ordered, 1):
+            result[i] = rank
+    return result
+
+
+def role_label(core_rate):
+    """核心率 -> (二值定位, 展示定位)。二值定位供 Roll 等逻辑使用；展示定位含全能档。
+
+    >60% 核心 / <40% 酱油；40%~60% 为全能，>50% 显示 全能(偏核心)、<50% 显示 全能(偏酱油)，=50% 只显示 全能（无偏向）。
+    """
+    if core_rate is None:
+        return "未定", "未定"
+    role = "核心" if core_rate >= .5 else "酱油"
+    if core_rate > .6:
+        display = "核心"
+    elif core_rate < .4:
+        display = "酱油"
+    elif core_rate == .5:
+        display = "全能"  # 正好一半核心一半酱油，没有偏向
+    else:
+        display = "全能(偏核心)" if core_rate > .5 else "全能(偏酱油)"
+    return role, display
+
+
 def aggregate_players(matches, aliases, overrides, mmr, hero_names, legacy=None):
     resolver = IdentityResolver(matches, aliases, legacy)
     rows = {}
     for match in sorted(matches, key=lambda m: (m.get("start_time", 0), str(m.get("match_id", "")))):
         positions = ranks(match)
+        role_positions = role_ranks(match)
         for index, p in enumerate(match.get("players", [])):
             key, pid, name, status = resolver.describe(p, match, index)
             row = rows.setdefault(key, {"name": name, "id": pid, "status": status,
                 "steamids": set(), "games": 0, "wins": 0, "results": 0,
-                "rank_all": [], "rank_team": [], "heroes": {},
+                "rank_all": [], "rank_team": [], "role_rank_team": [], "heroes": {},
                 "metrics": {f: [] for f in METRICS}, "kda": [], "dmg_ratio": [], "taken_ratio": []})
             sid = steam_id(p.get("steamid")) or steam_id((legacy or {}).get(str(p.get("name") or "")))
             if sid:
@@ -126,6 +166,8 @@ def aggregate_players(matches, aliases, overrides, mmr, hero_names, legacy=None)
             if index in positions:
                 row["rank_all"].append(positions[index][0])
                 row["rank_team"].append(positions[index][1])
+            if index in role_positions:
+                row["role_rank_team"].append(role_positions[index])
             hero = str(p.get("hero") or p.get("hero_name") or "").lower()
             hero = hero.replace("cdota_unit_hero_", "").replace("npc_dota_hero_", "").replace("_", "")
             if hero:
@@ -136,12 +178,13 @@ def aggregate_players(matches, aliases, overrides, mmr, hero_names, legacy=None)
     for key, row in rows.items():
         n, values = row["games"], row["metrics"]
         samples = {f: sum(v is not None for v in vs) for f, vs in values.items()}
-        samples.update(kda=len(row["kda"]), dmg_gold=len(row["dmg_ratio"]), role=len(row["rank_team"]))
-        core_rate = sum(r <= 3 for r in row["rank_team"]) / len(row["rank_team"]) if row["rank_team"] else None
-        role = ("核心" if core_rate >= .5 else "酱油") if core_rate is not None else "未定"
+        samples.update(kda=len(row["kda"]), dmg_gold=len(row["dmg_ratio"]), role=len(row["role_rank_team"]))
+        core_rate = sum(r <= 3 for r in row["role_rank_team"]) / len(row["role_rank_team"]) if row["role_rank_team"] else None
+        role, role_display = role_label(core_rate)
         override = next((overrides[k] for k in [key, row["name"]] + sorted(row["steamids"]) if k in overrides), {})
         if override.get("role") in ("核心", "酱油"):
             role = override["role"]
+            role_display = override["role"]
         mmr_value = next((mmr[k] for k in [key, row["name"]] + sorted(row["steamids"]) if k in mmr), None)
         try:
             mmr_value = max(0, int(mmr_value)) if mmr_value is not None else None
@@ -164,7 +207,7 @@ def aggregate_players(matches, aliases, overrides, mmr, hero_names, legacy=None)
             "场次": n, "胜": row["wins"], "负": results-row["wins"],
             "胜率": "%.1f%%" % (100*row["wins"]/results) if results else "暂无数据",
             "_winrate": row["wins"]/results if results else 0,
-            "定位": role, "核心率": "%.0f%%" % (100*core_rate) if core_rate is not None else "暂无数据",
+            "定位": role, "定位展示": role_display, "核心率": "%.0f%%" % (100*core_rate) if core_rate is not None else "暂无数据",
             "_core_rate": core_rate, "全场经济平均排名": average(row["rank_all"], 2),
             "队内经济平均排名": average(row["rank_team"], 2), "平均GPM": avg("gold_per_min"),
             "平均XPM": avg("xp_per_min"), "KDA": kda, "平均K/D/A": kd,

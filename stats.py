@@ -2,13 +2,11 @@
 """
 一键统计：读取 matches 目录下的 match_*.json，按玩家汇总胜率 / GPM / XPM / 定位。
 
-定位（核心 / 酱油）判定：
-    每场比赛按「终局净资产」排名：
-      - 全场 10 人排名：1 = 最有钱，10 = 最穷
-      - 己方 5 人排名：1 = 队内最有钱，5 = 队内最穷
-    队内排名 1~3 记为一场「核心」，4~5 记为「酱油」。
-    多场比赛中核心占比 >= 50% 判为「核心」，否则「酱油」。
-    同时输出全场/队内经济平均排名，排名越小越有钱。
+定位（核心 / 酱油 / 全能）判定：
+    每场按「终局净资产」做全场/队内经济排名（仅用于展示排名列）。
+    定位另按「队内补刀排名」判定：补刀前 3 记为一场「核心」，后 2 记为「酱油」，补刀相同用净资产打破平局。
+    多场比赛中核心占比 >60% 判「核心」，<40% 判「酱油」，40%~60% 为「全能」并按偏向显示 全能(偏核心/偏酱油)。
+    二值定位（核心率 >=50% 为核心）保留给 Roll 分队使用。
 
 可选：在脚本同目录新建 roles.json 手动指定定位，优先级高于自动判定，例如：
     {
@@ -158,12 +156,13 @@ def write_html(rows, matches, path):
     body = []
     for i, r in enumerate(rows, 1):
         r = {k: ("暂无数据" if v is None else v) for k, v in r.items()}
-        role_cls = "core" if r["定位"] == "核心" else "support"
+        role_text = r.get("定位展示", r["定位"])
+        role_cls = "swing" if role_text.startswith("全能") else ("core" if r["定位"] == "核心" else "support")
         body.append(f"""<tr>
 <td class="rank">{i}</td><td class="name">{html.escape(r['玩家'])}</td>
 <td>{r['场次']}</td><td>{r['胜']}-{r['负']}</td>
 <td class="{cls(r,'wr')}">{r['胜率']}</td>
-<td class="role {role_cls}">{r['定位']}</td>
+<td class="role {role_cls}">{role_text}</td>
 <td class="rate">{r['核心率']}</td>
 <td>{r['全场经济平均排名']}</td><td>{r['队内经济平均排名']}</td>
 <td class="{cls(r,'gpm')}">{r['平均GPM']}</td>
@@ -199,6 +198,7 @@ def write_html(rows, matches, path):
   td.role {{ font-weight: 700; }}
   td.role.core {{ color: #7ee0a1; }}
   td.role.support {{ color: #c8a5ff; }}
+  td.role.swing {{ color: #e8c37a; }}
   td.rate {{ color: #8a90a0; font-size: 12px; }}
   td.heroes {{ text-align: left; color: #a6acbb; max-width: 300px;
                overflow: hidden; text-overflow: ellipsis; }}
@@ -211,7 +211,7 @@ def write_html(rows, matches, path):
   .card .v {{ font-size: 20px; font-weight: 700; margin-top: 4px; }}
 </style></head><body>
 <h1>Dota 2 对黑数据统计</h1>
-<div class="sub">共 {len(matches)} 场比赛 · 按胜率降序 · 定位依据：队内净资产排名 1–3 为核心，4–5 为酱油</div>
+<div class="sub">共 {len(matches)} 场比赛 · 按胜率降序 · 定位依据：队内补刀排名 1–3 为核心，4–5 为酱油；核心率 40%~60% 为全能</div>
 <div class="cards">
   <div class="card"><div class="k">比赛场次</div><div class="v">{len(matches)}</div></div>
   <div class="card"><div class="k">玩家数</div><div class="v">{len(rows)}</div></div>

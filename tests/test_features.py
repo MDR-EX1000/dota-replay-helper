@@ -105,6 +105,65 @@ class Features(unittest.TestCase):
         self.assertTrue(rating["provisional"])
         self.assertEqual(rating["rating"], 1000)
 
+    def test_assign_flex_fill_rules(self):
+        af = balance.assign_flex
+        # 固定核心一致：全能全部当酱油
+        self.assertEqual(af(3, 2, 3, 1), (3, 3, 0, 0, True))
+        # A 少 1 核且有全能：补成一致，优先补核的是谁由 fill_players 决定
+        self.assertEqual(af(2, 2, 3, 1), (3, 3, 1, 0, True))
+        # B 少 2 核：B 补 2 个补平；A 的全能不动
+        self.assertEqual(af(4, 3, 2, 2), (4, 4, 0, 2, True))
+        # 没有全能时保持原规则：差 ≤1 合格，差 2 不合格
+        self.assertEqual(af(3, 0, 3, 0), (3, 3, 0, 0, True))
+        self.assertEqual(af(2, 0, 3, 0), (2, 3, 0, 0, True))
+        self.assertEqual(af(2, 0, 4, 0)[4], False)
+        # 全能不够补平：允许保留 1 个差距；仍差 2 才淘汰
+        self.assertEqual(af(1, 2, 4, 0), (3, 4, 2, 0, True))
+        self.assertEqual(af(1, 1, 4, 3), (2, 4, 1, 0, False))
+        self.assertEqual(af(5, 0, 1, 2), (5, 3, 0, 2, False))
+        # 全能足够时补平
+        self.assertEqual(af(5, 0, 2, 3), (5, 5, 0, 3, True))
+
+    def test_fill_players_prefers_highest_core_rate(self):
+        team = [
+            {"name": "固定核心", "role": "核心", "rating": 1100},
+            {"name": "低核心率", "role": "酱油", "flex": True, "core_rate": .42, "rating": 1200},
+            {"name": "高核心率", "role": "核心", "flex": True, "core_rate": .58, "rating": 1000},
+            {"name": "中核心率", "role": "核心", "flex": True, "core_rate": .50, "rating": 1050},
+        ]
+        self.assertEqual(balance.fill_players(team, 1), ["高核心率"])
+        self.assertEqual(balance.fill_players(team, 2), ["高核心率", "中核心率"])
+        self.assertEqual(balance.fill_players(team, 0), [])
+        self.assertEqual(balance.fill_players(team, 5), ["高核心率", "中核心率", "低核心率"])
+
+    def test_role_label_swing_band(self):
+        from player_data import role_label
+        self.assertEqual(role_label(None), ("未定", "未定"))
+        self.assertEqual(role_label(0.7), ("核心", "核心"))
+        self.assertEqual(role_label(0.3), ("酱油", "酱油"))
+        self.assertEqual(role_label(0.61), ("核心", "核心"))
+        self.assertEqual(role_label(0.39), ("酱油", "酱油"))
+        self.assertEqual(role_label(0.6), ("核心", "全能(偏核心)"))
+        self.assertEqual(role_label(0.5), ("核心", "全能"))
+        self.assertEqual(role_label(0.4), ("酱油", "全能(偏酱油)"))
+
+    def test_role_uses_last_hits_not_net_worth(self):
+        m = match()
+        #  radiant 队内净资产递增，但补刀完全反转：player-0 净资产最低、补刀最高
+        for i in range(5):
+            m["players"][i]["last_hits"] = 1000 - i * 100
+        row = next(r for r in stats.aggregate([m]) if r["玩家"] == "player-0")
+        self.assertEqual(row["核心率"], "100%")
+        self.assertEqual(row["定位"], "核心")
+        self.assertEqual(row["定位展示"], "核心")
+        # 队内经济排名仍按净资产展示（player-0 净资产最低 = 第 5）
+        self.assertEqual(row["队内经济平均排名"], 5.0)
+
+    def test_missing_last_hits_suspends_role(self):
+        m = match()
+        del m["players"][0]["last_hits"]
+        self.assertTrue(all(r["定位"] == "未定" for r in stats.aggregate([m])))
+
     def test_missing_net_worth_does_not_create_false_role_rank(self):
         m = match()
         del m["players"][0]["net_worth"]
