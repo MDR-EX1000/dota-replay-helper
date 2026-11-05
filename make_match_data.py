@@ -184,12 +184,12 @@ def transform_match(m, resolver=None, profile_cache=None):
     awards["unavailable"] = [
         x for x in awards.get("unavailable", []) if x.get("key") in KEEP_TITLES
     ]
+    # match_titles.py 只继续提供客观称号；旧 MVP 综合分公式不能混入页面说明。
+    stale = ("MVP", "英魂", "综合分 =", "KDA = (击杀 + 助攻)", "各指标除以全场最高值")
     awards["rules"] = [
-        r for r in awards.get("rules", []) if "MVP" not in r and "英魂" not in r
+        r for r in awards.get("rules", []) if not any(text in r for text in stale)
     ]
-    awards["rules"].append(
-        "MVP/SVP 使用 0–10 单局评分；败方高分可获虽败犹荣；KDA、敌塔师、光明系列及僵/硬/瘤/莽/搞子/躺了按单场指标授予。"
-    )
+    awards["rules"].extend(rating.rule_lines())
 
 
     kills = []

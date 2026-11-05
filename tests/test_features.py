@@ -178,6 +178,16 @@ class Features(unittest.TestCase):
         self.assertEqual(next(p for p in public["players"] if p["title"] == "MVP")["team"], "radiant")
         self.assertEqual(next(p for p in public["players"] if p["title"] == "SVP")["team"], "dire")
 
+    def test_public_title_rules_match_current_rating_implementation(self):
+        rules = make_match_data.transform_match(match())["awards"]["rules"]
+        text = "\n".join(rules)
+        self.assertNotIn("30% KDA", text)
+        self.assertNotIn("各指标除以全场最高值", text)
+        self.assertNotIn("英魂", text)
+        self.assertTrue(any("核心权重：输出30%、参战25%、经济15%、推塔10%" in r for r in rules))
+        self.assertTrue(any("辅助权重：输出10%、参战35%、承伤5%" in r for r in rules))
+        self.assertTrue(any("单局分 = 6 + (加权比值−1)×8.75" in r for r in rules))
+
     def test_unknown_result_has_no_score_or_honor(self):
         m = match()
         m["radiant_win"] = None
