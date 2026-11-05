@@ -224,7 +224,7 @@ def main():
     for label, team in (("队伍A", chosen["team_a"]), ("队伍B", chosen["team_b"])):
         members = "、".join(f"{p['name']}({p['rating']:.0f})"
                            for p in sorted(team, key=lambda x: -x["rating"]))
-        c = sum(1 for p in team if p["role"] == "核心")
+        c = chosen["ca"] if label == "队伍A" else chosen["cb"]
         fill_n = chosen.get("fill_a" if label == "队伍A" else "fill_b", 0)
         who = chosen.get("fill_who_a" if label == "队伍A" else "fill_who_b", [])
         fill = f"，含{'、'.join(who)}补核" if fill_n else ""
