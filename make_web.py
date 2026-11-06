@@ -50,6 +50,7 @@ def collect_players(matches=None):
             "rating": p["rating"],
             "elo": p["elo"],
             "perf": p["perf"],
+            "rel": p.get("rel"),
             "role": p["role"],
             "roleDisplay": s.get("定位展示", p["role"]),
             "flex": str(s.get("定位展示", "")).startswith("全能"),
@@ -1298,6 +1299,7 @@ function aiContext() {
   return {
     players: pool.map(p => ({
       name: p.name, rating: p.rating, role: p.role,
+      elo: p.elo, perf: p.perf, rel: p.rel,
       gpm: p.gpm, xpm: p.xpm, kda: p.kda, mmr: p.mmr
     })),
     lineups: state.results.map(r => ({

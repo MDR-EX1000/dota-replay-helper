@@ -82,8 +82,10 @@ function readBody(req) {
 }
 
 function buildSystem(context) {
+  const part = v => (v === undefined || v === null || v === '' ? '-' : v);
   const players = (context.players || []).map(p =>
-    `- ${p.name} | 评分 ${p.rating} | ${p.role} | KDA ${p.kda} | GPM ${p.gpm} | XPM ${p.xpm} | MMR ${p.mmr}`
+    `- ${p.name} | 综合分 ${part(p.rating)}（Elo ${part(p.elo)} / 表现分 ${part(p.perf)} / 相对表现分 ${part(p.rel)}）`
+    + ` | ${p.role} | KDA ${part(p.kda)} | GPM ${part(p.gpm)} | XPM ${part(p.xpm)} | MMR ${part(p.mmr)}`
   ).join('\n');
 
   const lineups = (context.lineups || []).map((l, i) =>
@@ -105,6 +107,18 @@ function buildSystem(context) {
     '【当前 3 套方案】',
     lineups || '（无）',
     adopted,
+    '',
+    '【评分口径（新版）】',
+    '综合分 = 0.4 × Elo + 0.4 × 表现分 + 0.2 × 对局相对表现分。',
+    '- Elo：初始 1000，K=32；按两队平均分计算期望胜率，胜方 5 人同加、败方 5 人同减。',
+    '- 表现分：对固定位置基准的绝对表现，1000 + 500 × Σ[权重 × (实际值/基准值 − 1)]；'
+      + '权重 KDA 40%、GPM 15%、XPM 15%、伤害/经济 30%；'
+      + '基准为核心 3.7 / 540 / 720 / 1.59，酱油 2.4 / 335 / 490 / 1.40；再按 n/(n+5) 向 1000 收缩。',
+    '- 对局相对表现分：每场按补刀分核心组（每队前 3，共 6 人）和酱油组（每队后 2，共 4 人）；'
+      + '组内 KDA/GPM/XPM/伤害经济比分别除以组均值，按同一权重合成 R；'
+      + '单场 = 1000 + 500 × (R − 1)，限制在 500–1500；再按 n/(n+5) 收缩。',
+    '- MMR 仅作展示，不参与综合分；胜率也仅展示，避免与 Elo 重复计算。',
+    '讨论分队时以综合分为主要依据，不要把 MMR 或胜率当作实力评分。',
     '',
     '【分队规则】',
     '1. 每队正好 5 人，两队共 10 人，且必须正好覆盖给定的 10 人。',
