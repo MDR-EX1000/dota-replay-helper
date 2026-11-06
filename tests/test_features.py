@@ -95,15 +95,15 @@ class Features(unittest.TestCase):
             self.assertIsNone(metric({"v":value}, "v"))
         self.assertIsNone(metric({"v":0, "data_quality":{"missing_fields":["v"]}}, "v"))
 
-    def test_incomplete_statistics_use_valid_samples_and_provisional_rating(self):
+    def test_incomplete_statistics_use_valid_samples_without_provisional_rating(self):
         a, b = match(), match("1234567891")
         b["players"][0]["gold_per_min"] = None
         row = next(r for r in stats.aggregate([a, b]) if r["玩家"] == "player-0")
         self.assertEqual(row["平均GPM"], 300)
         self.assertEqual(row["_samples"]["gold_per_min"], 1)
         rating = next(p for p in balance.build_ratings([a, b]).values() if p["name"] == "player-0")
-        self.assertTrue(rating["provisional"])
-        self.assertEqual(rating["rating"], 1000)
+        self.assertFalse(rating["provisional"])
+        self.assertGreater(rating["rating"], 0)
 
     def test_assign_flex_fill_rules(self):
         af = balance.assign_flex
@@ -184,15 +184,15 @@ class Features(unittest.TestCase):
             for v in vals:
                 self.assertTrue(500 <= v <= 1500)
 
-    def test_rating_no_longer_depends_on_mmr(self):
+    def test_rating_includes_mmr_at_quarter_weight(self):
         m = match()
         base = balance.build_ratings([m])
         from unittest.mock import patch as _patch
         with _patch.object(stats, "MMR", {"player-0": 9999}):
             high = balance.build_ratings([m])
-        for key in base:
-            self.assertAlmostEqual(base[key]["rating"], high[key]["rating"], places=6)
-        # 新增子项存在且有限
+        key = next(k for k, p in base.items() if p["name"] == "player-0")
+        expected = 0.25 * ((9999 - 2000) / 30)
+        self.assertAlmostEqual(high[key]["rating"] - base[key]["rating"], expected, delta=0.2)
         self.assertTrue(all("rel" in p for p in base.values()))
 
     def test_missing_net_worth_does_not_create_false_role_rank(self):
@@ -335,7 +335,8 @@ class Features(unittest.TestCase):
         m = match()
         m["radiant_win"] = None
         players, _ = make_web.collect_players([m])
-        self.assertTrue(all(p["winRate"] is None and p["provisional"] for p in players))
+        self.assertTrue(all(p["winRate"] is None for p in players))
+        self.assertTrue(all(not p["provisional"] for p in players))
 
     def test_mvp_weights_keep_zero_components_zero(self):
         m = match()

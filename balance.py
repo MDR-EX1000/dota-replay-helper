@@ -19,9 +19,9 @@
                  场次收缩：1000 + (原始表现−1000) × n/(n+5)
     对局相对表现分: 每场按补刀分核心组(6人)/酱油组(4人)，组内 KDA/GPM/XPM/伤害经济比
                  除以组均值后按表现分同权重合成，单场 = 1000 + 500×(比值−1)，
-                 再按场次收缩：1000 + (场均−1000) × n/(n+5)。纯对局数据，不用主观 MMR。
-    综合分     : 0.4 × Elo + 0.4 × 表现分 + 0.2 × 对局相对表现分
-                 MMR 仅作展示，不参与综合分
+                 再按场次收缩：1000 + (场均−1000) × n/(n+5)。
+    MMR分      : 1000 + (MMR − 3000) / 30（未登记默认按 2000 计算）
+    综合分     : 0.4 × Elo + 0.25 × 表现分 + 0.1 × 对局相对表现分 + 0.25 × MMR分
                  （Elo 已包含胜负信息，胜率只展示，不重复计分）
 
 分队:
@@ -190,17 +190,16 @@ def build_ratings(matches):
             score = (.40*(values["kda"]/b["kda"]-1) + .15*(values["gpm"]/b["gpm"]-1)
                      + .15*(values["xpm"]/b["xpm"]-1) + .30*(values["dmg_gold"]/b["dmg_gold"]-1))
             perf = max(BASE-500, min(BASE+500, BASE+500*score*row["场次"]/(row["场次"]+5)))
-        # MMR 仅保留展示，不参与综合分；第三项改为对局相对表现分
+        # MMR 按旧线性换算参与综合分；未登记默认 2000
         mmr_num = row["_mmr"] if row["_mmr"] is not None else 2000
         mmr_rating = BASE+(mmr_num-3000)/30
         samples = rel_scores.get(key, [])
         rel = BASE if not samples else BASE + (sum(samples)/len(samples) - BASE) * len(samples)/(len(samples)+5)
-        provisional = row["场次"] < 2 or not ready
-        rating = BASE if provisional else .4*elo[key]+.4*perf+.2*rel
+        rating = .4*elo[key]+.25*perf+.1*rel+.25*mmr_rating
         players[key] = {"id": row["_id"], "name": row["玩家"], "identity_status": row["_identity_status"],
             "elo": round(elo[key], 1), "perf": round(perf, 1), "mmr": mmr_num,
             "mmr_rating": round(mmr_rating, 1), "rel": round(rel, 1), "rating": round(rating, 1),
-            "provisional": provisional, "role": row["定位"], "games": row["场次"],
+            "provisional": False, "role": row["定位"], "games": row["场次"],
             "flex": str(row.get("定位展示", "")).startswith("全能"),
             "core_rate": row.get("_core_rate"),
             "win_rate": row["_winrate"], "gpm": row["平均GPM"], "xpm": row["平均XPM"],
@@ -272,12 +271,9 @@ def print_ratings(players):
           f"{'胜率':>8}{'KDA':>7}{'平均K/D/A':>18}{'GPM':>7}{'XPM':>7}")
     print("-" * 115)
     for p in sorted(players.values(), key=lambda x: -x["rating"]):
-        mark = "*" if p.get("provisional") else ""
-        print(f"{p['name'][:16] + mark:<18}{p['rating']:>7.1f}{p['elo']:>7.1f}{p['perf']:>7.1f}"
+        print(f"{p['name'][:16]:<18}{p['rating']:>7.1f}{p['elo']:>7.1f}{p['perf']:>7.1f}"
               f"{str(p['mmr']):>6}{p['role']:>6}{p['games']:>5}{p['win_rate']*100:>7.1f}%"
               f"{str(p['kda'] if p['kda'] is not None else '-'):>7}{p['kd']:>18}{str(p['gpm']):>7}{str(p['xpm']):>7}")
-    if any(p.get("provisional") for p in players.values()):
-        print(f"* 场次少于 2 场、身份待确认或评分数据不完整，综合分暂按 {BASE:.0f} 处理")
 
 
 def main():
