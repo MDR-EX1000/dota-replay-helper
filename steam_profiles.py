@@ -124,7 +124,7 @@ def refresh_profiles(matches, cache_path=None, key=None, aliases=None, legacy=No
         return {"status": "no_key", "updated": 0}
     resolver = IdentityResolver(matches, aliases if aliases is not None else _config("aliases.json"),
                                 legacy if legacy is not None else _config("legacy_identities.json"))
-    latest, affected = {}, set()
+    latest, counts, affected = {}, {}, set()
     for match in sorted(matches, key=lambda m: (m.get("start_time", 0), str(m["match_id"]))):
         for index, player in enumerate(match.get("players", [])):
             sid = steam_id(player.get("steamid"))
@@ -132,9 +132,16 @@ def refresh_profiles(matches, cache_path=None, key=None, aliases=None, legacy=No
                 continue
             _, pid, _, _ = resolver.describe(player, match, index)
             latest[pid] = sid
+            counts[(pid, sid)] = counts.get((pid, sid), 0) + 1
             if str(match["match_id"]) in changed:
                 affected.add(pid)
-    targets = {latest[pid]: pid for pid in affected}
+    # 多账号合并时优先用出场最多的主账号，避免头像被偶尔上线的副账号覆盖。
+    primary = {}
+    for (pid, sid), games in counts.items():
+        best = primary.get(pid)
+        if best is None or games > best[0] or (games == best[0] and sid == latest.get(pid)):
+            primary[pid] = (games, sid)
+    targets = {primary[pid][1]: pid for pid in affected if pid in primary}
     profiles = {}
     now = time.time()
     try:
