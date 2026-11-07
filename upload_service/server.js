@@ -310,9 +310,10 @@ async function syncStateFromCloud(force = false) {
     if (index && Array.isArray(index.ids)) {
       const local = new Set(ids);
       const missing = index.ids.filter((id) => !local.has(String(id)));
+      // 合并成功后必须复位，否则启动时检查到的缺失会一直阻止后续上传
+      stateIncomplete = missing.length > 0;
       if (missing.length) {
         // 云端记录了本地没有的比赛：禁止用不完整数据覆盖线上
-        stateIncomplete = true;
         console.error('云端 state 有本地缺失的比赛:', missing.join(','));
       }
     }
