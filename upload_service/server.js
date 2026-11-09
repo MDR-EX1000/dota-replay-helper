@@ -269,58 +269,71 @@ async function syncStateFromCloud(force = false) {
     console.error('未登录，跳过云端状态同步，仅使用镜像内置数据');
     return;
   }
+  const tmpIndex = '/tmp/remote-state-index.json';
+  let ids = [];
   try {
-    // 先下载到独立目录：云端为空时命令仍返回 0，必须检查实际文件
-    fs.rmSync(CLOUD_STATE_DIR, { recursive: true, force: true });
-    fs.mkdirSync(CLOUD_STATE_DIR, { recursive: true });
+    try { fs.unlinkSync(tmpIndex); } catch (_) { /* ignore */ }
     const r = await run(
       'tcb',
-      ['hosting', 'download', 'state', CLOUD_STATE_DIR, '--dir', '-e', ENV_ID],
-      { timeout: 120000 }
+      ['hosting', 'download', 'state/index.json', tmpIndex, '-e', ENV_ID],
+      { timeout: 60000 }
     );
-    if (r.code !== 0) {
-      console.log('云端 state 下载失败，使用镜像内置数据:', r.err.slice(-300));
+    if (r.code !== 0 || !fs.existsSync(tmpIndex)) {
+      console.log('云端 state 索引下载失败，使用镜像内置数据:', (r.err || r.out).slice(-300));
       return;
     }
-    const files = fs.readdirSync(CLOUD_STATE_DIR).filter((f) => /^match_\d+\.json$/.test(f));
-    if (!files.length) {
-      console.log('云端 state 为空，使用镜像内置数据');
-      return;
-    }
-
-    stateRemote = true;
-    fs.mkdirSync(STATE_DIR, { recursive: true });
-    fs.mkdirSync(JSON_DIR, { recursive: true });
-    for (const f of files) {
-      fs.copyFileSync(path.join(CLOUD_STATE_DIR, f), path.join(STATE_DIR, f));
-      fs.copyFileSync(path.join(CLOUD_STATE_DIR, f), path.join(JSON_DIR, f));
-    }
-    const remoteProfiles = path.join(CLOUD_STATE_DIR, 'steam_profiles.json');
-    if (fs.existsSync(remoteProfiles)) fs.copyFileSync(remoteProfiles, path.join(STATE_DIR, 'steam_profiles.json'));
-    const remoteIndex = path.join(CLOUD_STATE_DIR, 'index.json');
-    if (fs.existsSync(remoteIndex)) {
-      fs.copyFileSync(remoteIndex, path.join(STATE_DIR, 'index.json'));
-    }
-
-    // 索引按合并后的本地集合重建（本地镜像可能比云端新）
-    const ids = listMatchIds();
-    writeIndex(ids);
-
-    const index = loadIndex();
-    if (index && Array.isArray(index.ids)) {
-      const local = new Set(ids);
-      const missing = index.ids.filter((id) => !local.has(String(id)));
-      // 合并成功后必须复位，否则启动时检查到的缺失会一直阻止后续上传
-      stateIncomplete = missing.length > 0;
-      if (missing.length) {
-        // 云端记录了本地没有的比赛：禁止用不完整数据覆盖线上
-        console.error('云端 state 有本地缺失的比赛:', missing.join(','));
-      }
-    }
-    console.log(`state 已合并：云端 ${files.length} 场，本地共 ${ids.length} 场`);
+    const idx = JSON.parse(fs.readFileSync(tmpIndex, 'utf8'));
+    ids = Array.isArray(idx.ids) ? idx.ids.map(String) : [];
   } catch (err) {
-    console.error('state 同步异常:', err.message);
+    console.error('state 索引解析失败:', err.message);
+    return;
   }
+  stateRemote = true;
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  fs.mkdirSync(JSON_DIR, { recursive: true });
+
+  // 只补下载本地缺失的比赛，避免整目录下载在容器里失败导致永远同步不上
+  const local = new Set(listMatchIds());
+  const missing = ids.filter((id) => !local.has(id));
+  let fetched = 0;
+  for (const id of missing) {
+    const tmp = `/tmp/remote-match-${id}.json`;
+    try { fs.unlinkSync(tmp); } catch (_) { /* ignore */ }
+    const r = await run(
+      'tcb',
+      ['hosting', 'download', `state/match_${id}.json`, tmp, '-e', ENV_ID],
+      { timeout: 60000 }
+    );
+    if (r.code !== 0 || !fs.existsSync(tmp)) {
+      console.error('下载缺失比赛失败:', id, (r.err || r.out).slice(-200));
+      continue;
+    }
+    fs.copyFileSync(tmp, path.join(STATE_DIR, `match_${id}.json`));
+    fs.copyFileSync(tmp, path.join(JSON_DIR, `match_${id}.json`));
+    fetched++;
+  }
+
+  const tmpProfiles = '/tmp/remote-steam-profiles.json';
+  try { fs.unlinkSync(tmpProfiles); } catch (_) { /* ignore */ }
+  const rp = await run(
+    'tcb',
+    ['hosting', 'download', 'state/steam_profiles.json', tmpProfiles, '-e', ENV_ID],
+    { timeout: 60000 }
+  );
+  if (rp.code === 0 && fs.existsSync(tmpProfiles)) {
+    try { fs.copyFileSync(tmpProfiles, path.join(STATE_DIR, 'steam_profiles.json')); } catch (_) { /* ignore */ }
+  }
+
+  // 索引按合并后的本地集合重建（本地镜像可能比云端新）
+  const nowIds = listMatchIds();
+  writeIndex(nowIds);
+  const have = new Set(nowIds);
+  const stillMissing = ids.filter((id) => !have.has(id));
+  stateIncomplete = stillMissing.length > 0;
+  if (stillMissing.length) {
+    console.error('云端 state 仍有本地缺失的比赛:', stillMissing.join(','));
+  }
+  console.log(`state 已合并：云端 ${ids.length} 场，补下 ${fetched} 场，本地共 ${nowIds.length} 场`);
 }
 
 /**
@@ -591,7 +604,6 @@ async function processJob(job) {
 
 async function handleUpload(req, res) {
   if (!checkCode(req)) return json(res, 401, { error: '口令错误' });
-  if (stateIncomplete) return json(res, 503, { error: '服务状态未就绪，请稍后重试' });
 
   const uploadId = String(req.headers['x-upload-id'] || '');
   const index = Number(req.headers['x-chunk-index']);
@@ -606,6 +618,10 @@ async function handleUpload(req, res) {
   if (!/^\d{7,12}\.dem$/i.test(name)) {
     return json(res, 400, { error: '文件名必须是比赛 ID，例如 9061520546.dem' });
   }
+
+  // 首个分片前先合并云端最新的比赛，避免镜像落后时直接拒绝上传
+  if (index === 0) await syncStateFromCloud(true);
+  if (stateIncomplete) return json(res, 503, { error: '服务状态未就绪，请稍后重试' });
 
   // 第一片就检查 ID 是否已存在，避免白传 100MB（force 时跳过）
   const force = req.headers['x-force'] === '1';
