@@ -248,6 +248,12 @@ TEMPLATE = r"""<!DOCTYPE html>
   .hero-kpi { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 16px; min-width:110px; }
   .hero-kpi .k { color:var(--muted); font-size:12px; } .hero-kpi .v { font-size:20px; font-weight:600; }
   .hero-sub { margin:18px 0 8px; font-size:15px; }
+  .hero-matchups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:18px; }
+  .hero-matchups table { table-layout:fixed; }
+  .hero-matchups th:nth-child(1) { width:40%; }
+  .hero-matchups th:nth-child(2), .hero-matchups th:nth-child(3), .hero-matchups th:nth-child(4) { width:20%; }
+  .hero-matchups .hero-sub { margin-top:0; }
+  @media (max-width:900px) { .hero-matchups { grid-template-columns:1fr; } }
   .rules-box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
                padding:18px 20px; margin-bottom:14px; }
   .rules-box table { font-size:13.5px; }
@@ -629,7 +635,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <p><b>出场</b>：英雄在多少场比赛里出现过，一场里同一英雄最多算一次。<b>出场率</b> = 出场场次 / 总场次。</p>
     <p><b>胜率</b> = 该英雄所在队伍获胜的场次 / 出场场次，使用原始值，不做平滑；出场很少时胜率波动大，列表默认只显示出场不少于 3 场的英雄，可在页面上调整。</p>
     <p><b>谁最爱玩</b>：出场最多的玩家。<b>人柱力</b>：使用该英雄至少 3 场且原始胜率 &gt; 50% 的玩家中，胜率最高者；同胜率依次比较胜场和出场场次，旁边显示胜率与场次；无人满足条件时显示“虚位以待”。</p>
-    <p>点击英雄可查看使用者的出场与胜率，以及逐场记录。</p>
+    <p>点击英雄可查看使用者的出场与胜率，以及逐场记录。<b>克制榜 / 被克榜</b>：与同一对手英雄至少交手 3 场，胜率 ≥60% 进入克制榜，≤40% 进入被克榜；各最多 10 个，按胜率和交手场次排序，不符合条件的数量不补齐。</p>
   </div>
 
   <div class="rules-box">
@@ -783,6 +789,16 @@ function renderHeroes() {
     ? rows.map(h => "<tr>" + HERO_COLUMNS.map(c => `<td class="${c.left ? "left" : "num"}">${c.fmt(h)}</td>`).join("") + "</tr>").join("")
     : `<tr><td colspan="${HERO_COLUMNS.length}" class="empty">没有出场不少于 ${min} 场的英雄，调低上方的最少出场场次试试</td></tr>`;
 }
+function heroMatchupTable(title, rows, emptyText) {
+  return `<div><h3 class="hero-sub">${title}</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th class="left">对手英雄</th><th>交手</th><th>胜-负</th><th>胜率</th></tr></thead>
+      <tbody>${rows.length ? rows.map(r => `<tr>
+        <td class="left"><a class="hero-link hero-name" href="#hero=${encodeURIComponent(r.key)}">${gameImage(r.image, "hero")}${esc(r.name)}</a></td>
+        <td>${r.games}</td><td>${r.wins}-${r.losses}</td><td>${nfmt(r.win_rate, 1)}%</td></tr>`).join("")
+        : `<tr><td colspan="4" class="empty">${emptyText}</td></tr>`}</tbody>
+    </table></div></div>`;
+}
 function renderHeroDetail(key) {
   const h = HERO_STATS.heroes.find(x => x.key === key);
   const box = $("heroDetail");
@@ -797,6 +813,10 @@ function renderHeroDetail(key) {
       <div class="hero-kpi"><div class="k">出场率</div><div class="v">${nfmt(h.pick_rate, 1)}%</div></div>
       <div class="hero-kpi"><div class="k">胜-负</div><div class="v">${h.wins}-${h.losses}</div></div>
       <div class="hero-kpi"><div class="k">胜率</div><div class="v">${h.win_rate == null ? "暂无数据" : nfmt(h.win_rate, 1) + "%"}</div></div>
+    </div>
+    <div class="hero-matchups">
+      ${heroMatchupTable('克制榜 <span class="hero-shown">至少交手 3 场，胜率 ≥60%</span>', h.counters, '暂无显著克制关系')}
+      ${heroMatchupTable('被克榜 <span class="hero-shown">至少交手 3 场，胜率 ≤40%</span>', h.countered_by, '暂无显著被克关系')}
     </div>
     <h3 class="hero-sub">谁在玩</h3>
     <div class="table-wrap"><table class="hero-table hero-users">

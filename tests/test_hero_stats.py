@@ -93,6 +93,33 @@ class HeroStats(unittest.TestCase):
         self.assertEqual(axe["mainstay"]["name"], "玩家0")
         self.assertEqual(axe["mainstay"]["win_rate"], 75.0)
 
+    def test_counter_lists_need_three_games_and_are_mirrored(self):
+        two = hero_stats.summarize([pub_match(str(i), "radiant", HEROES) for i in range(2)])["heroes"]
+        self.assertEqual(next(h for h in two if h["key"] == "axe")["counters"], [])
+        three = hero_stats.summarize([pub_match(str(i), "radiant", HEROES) for i in range(3)])["heroes"]
+        axe = next(h for h in three if h["key"] == "axe")
+        zeus = next(h for h in three if h["key"] == "zeus")
+        axe_vs_zeus = next(r for r in axe["counters"] if r["key"] == "zeus")
+        zeus_vs_axe = next(r for r in zeus["countered_by"] if r["key"] == "axe")
+        self.assertEqual((axe_vs_zeus["games"], axe_vs_zeus["wins"]), (3, 3))
+        self.assertEqual((zeus_vs_axe["games"], zeus_vs_axe["losses"]), (3, 3))
+
+    def test_counter_lists_exclude_balanced_four_game_matchup(self):
+        ms = [pub_match(str(i), "radiant" if i % 2 == 0 else "dire", HEROES) for i in range(4)]
+        axe = next(h for h in hero_stats.summarize(ms)["heroes"] if h["key"] == "axe")
+        self.assertEqual(axe["counters"], [])
+        self.assertEqual(axe["countered_by"], [])
+
+    def test_counter_lists_are_capped_at_ten(self):
+        ms = []
+        for i in range(36):
+            heroes = list(HEROES)
+            heroes[9] = "enemy%d" % (i % 12)
+            ms.append(pub_match(str(i), "radiant", heroes))
+        axe = next(h for h in hero_stats.summarize(ms)["heroes"] if h["key"] == "axe")
+        self.assertEqual(len(axe["counters"]), 10)
+        self.assertTrue(all(r["games"] >= 3 and r["win_rate"] >= 60 for r in axe["counters"]))
+
     def test_sorted_by_games_then_wins_then_key(self):
         ms = [pub_match("1", "radiant", HEROES), pub_match("2", "radiant", HEROES)]
         ms[1]["players"][0]["hero"] = "zzz"
@@ -116,6 +143,8 @@ class HeroStats(unittest.TestCase):
         self.assertIn("谁最爱玩", page)
         self.assertIn("人柱力", page)
         self.assertIn("虚位以待", page)
+        self.assertIn("克制榜", page)
+        self.assertIn("被克榜", page)
         self.assertNotIn("__HEROES__", page)
         self.assertNotIn("</script><b>", page)  # 英雄名里的脚本结束标记不能破坏页面
         self.assertIn("value=\"3\"", page)      # 最少出场场次默认 3

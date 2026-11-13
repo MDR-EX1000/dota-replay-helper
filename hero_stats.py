@@ -22,6 +22,7 @@ def summarize(matches):
     """
     total = 0
     groups = {}
+    matchups = {}
     for match in matches:
         players = match.get("players") or []
         if not players:
@@ -54,6 +55,41 @@ def summarize(matches):
             g["records"].append({"match": match.get("id"), "date": match.get("date") or "",
                                  "player": player.get("name") or "", "player_id": player.get("id") or "",
                                  "avatar": player.get("avatar") or "", "team": player.get("team"), "win": won})
+        # 有向对阵：A 对 B 的胜率只看双方不同阵营的交手，和英雄总胜率无关。
+        for player in players:
+            key, team = hero_key(player), player.get("team")
+            if not key or team not in TEAMS:
+                continue
+            won = (team == winner) if winner in TEAMS else None
+            if won is None:
+                continue
+            for opponent in players:
+                opp = hero_key(opponent)
+                if not opp or opponent.get("team") not in TEAMS or opponent.get("team") == team:
+                    continue
+                row = matchups.setdefault((key, opp), {"games": 0, "wins": 0, "losses": 0})
+                row["games"] += 1
+                row["wins" if won else "losses"] += 1
+
+    # 至少交手 3 场，胜率 >=60% 为克制、<=40% 为被克；最多各 10 个，不凑数。
+    relations = {}
+    for (key, opp), row in matchups.items():
+        if row["games"] < 3:
+            continue
+        win_rate = row["wins"] / row["games"] * 100
+        kind = "counters" if win_rate >= 60 else "countered_by" if win_rate <= 40 else None
+        if not kind:
+            continue
+        entry = {"key": opp, "name": groups[opp]["name"], "image": groups[opp]["image"],
+                 "win_rate": win_rate, **row}
+        relations.setdefault((key, kind), []).append(entry)
+
+    def relation_rows(key, kind):
+        rows = relations.get((key, kind), [])
+        rows.sort(key=lambda r: ((-r["win_rate"] if kind == "counters" else r["win_rate"]),
+                                 -r["games"], -r["wins"] if kind == "counters" else -r["losses"], r["key"]))
+        return rows[:10]
+
     heroes = []
     for g in groups.values():
         decided = g["wins"] + g["losses"]
@@ -72,6 +108,8 @@ def summarize(matches):
             "pick_rate": g["games"] / total * 100 if total else None,
             "win_rate": g["wins"] / decided * 100 if decided else None,
             "user_count": len(users), "users": users, "mainstay": mainstay,
+            "counters": relation_rows(g["key"], "counters"),
+            "countered_by": relation_rows(g["key"], "countered_by"),
             "records": sorted(g["records"], key=lambda r: (r["date"], str(r["match"])), reverse=True),
         })
     heroes.sort(key=lambda h: (-h["games"], -h["wins"], h["key"]))
