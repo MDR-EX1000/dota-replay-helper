@@ -108,7 +108,7 @@ class HeroStats(unittest.TestCase):
         self.assertIn("人柱力", page)
         self.assertNotIn("__HEROES__", page)
         self.assertNotIn("</script><b>", page)  # 英雄名里的脚本结束标记不能破坏页面
-        self.assertIn("value=\"5\"", page)      # 最少出场场次默认 5
+        self.assertIn("value=\"3\"", page)      # 最少出场场次默认 3
 
     def test_load_hero_stats_reads_generated_match_file_and_tolerates_missing(self):
         import tempfile, os

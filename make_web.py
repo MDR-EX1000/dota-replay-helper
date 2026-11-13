@@ -471,7 +471,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   <div id="heroList">
     <h2>英雄出场与胜率（共 <span id="heroTotal"></span> 场比赛，点击表头排序，点击英雄查看详情）</h2>
     <div class="hero-filter">
-      <label>最少出场场次 <input id="heroMin" type="number" min="1" step="1" value="5"></label>
+      <label>最少出场场次 <input id="heroMin" type="number" min="1" step="1" value="3"></label>
       <span id="heroShown" class="hero-shown"></span>
     </div>
     <div class="table-wrap">
@@ -626,7 +626,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   <div class="rules-box">
     <h3 style="margin-top:0">四、英雄统计口径</h3>
     <p><b>出场</b>：英雄在多少场比赛里出现过，一场里同一英雄最多算一次。<b>出场率</b> = 出场场次 / 总场次。</p>
-    <p><b>胜率</b> = 该英雄所在队伍获胜的场次 / 出场场次，使用原始值，不做平滑；出场很少时胜率波动大，列表默认只显示出场不少于 5 场的英雄，可在页面上调整。</p>
+    <p><b>胜率</b> = 该英雄所在队伍获胜的场次 / 出场场次，使用原始值，不做平滑；出场很少时胜率波动大，列表默认只显示出场不少于 3 场的英雄，可在页面上调整。</p>
     <p><b>谁最爱玩</b>：出场最多的玩家。<b>人柱力</b>：使用该英雄至少 3 场的玩家中，原始胜率最高者；同胜率依次比较胜场和出场场次，旁边显示胜率与场次；无人达到 3 场时不评选。</p>
     <p>点击英雄可查看使用者的出场与胜率，以及逐场记录。</p>
   </div>
@@ -741,7 +741,7 @@ const HERO_COLUMNS = [
     fmt: h => h.users[0] ? heroUserHtml(h.users[0], `${h.users[0].games} 场`) : "-" },
   { key: "mainstay", label: "人柱力", type: "num", left: true,
     get: h => h.mainstay ? h.mainstay.win_rate : null,
-    fmt: h => h.mainstay ? heroUserHtml(h.mainstay, `${nfmt(h.mainstay.win_rate, 1)}% · ${h.mainstay.games} 场`) : "-" },
+    fmt: h => h.mainstay ? heroUserHtml(h.mainstay, `${nfmt(h.mainstay.win_rate, 1)}% · ${h.mainstay.games} 场`) : "" },
 ];
 function heroUserHtml(user, note) {
   return `<span class="hero-user">${playerAvatar(user)}<span>${esc(user.name)}</span><span class="top-user-n">${esc(note)}</span></span>`;
