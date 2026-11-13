@@ -69,9 +69,20 @@ class HeroStats(unittest.TestCase):
         self.assertEqual(axe["users"][0]["games"], 2)
         self.assertEqual(axe["users"][0]["win_rate"], 100.0)
         self.assertEqual(axe["users"][0]["avatar"], "https://avatars.steamstatic.com/example.jpg")
-        # 两人都是 100% 胜率时，胜场更多的人是人柱力
-        self.assertEqual(axe["mainstay"]["name"], "玩家0")
-        self.assertEqual(axe["mainstay"]["games"], 2)
+        # 玩家0 只有 2 场、路人只有 1 场，都未达到人柱力的 3 场门槛
+        self.assertIsNone(axe["mainstay"])
+
+    def test_mainstay_requires_three_games(self):
+        ms = [pub_match(str(i), "radiant", HEROES) for i in range(4)]
+        ms[2]["players"][0]["id"] = "other"
+        ms[2]["players"][0]["name"] = "路人"
+        three = next(h for h in hero_stats.summarize(ms[:3])["heroes"] if h["key"] == "axe")
+        # 玩家0 两场全胜、路人一场全胜，但都不能凭低样本当选
+        self.assertIsNone(three["mainstay"])
+        four = next(h for h in hero_stats.summarize(ms)["heroes"] if h["key"] == "axe")
+        self.assertEqual(four["mainstay"]["name"], "玩家0")
+        self.assertEqual(four["mainstay"]["games"], 3)
+        self.assertEqual(four["mainstay"]["win_rate"], 100.0)
 
     def test_sorted_by_games_then_wins_then_key(self):
         ms = [pub_match("1", "radiant", HEROES), pub_match("2", "radiant", HEROES)]
