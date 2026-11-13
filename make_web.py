@@ -239,6 +239,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   .top-user-n { color:var(--muted); font-size:12px; margin-left:6px; white-space:nowrap; }
   .hero-user { display:inline-flex; align-items:center; gap:2px; min-width:0; }
   .hero-user .player-avatar { margin-right:4px; }
+  .hero-vacant { color:var(--muted); font-size:12px; }
   .hero-name { display:inline-flex; align-items:center; gap:8px; font-weight:600; }
   a.hero-link { color:var(--text); text-decoration:none; }
   a.hero-link:hover { color:var(--accent); }
@@ -627,7 +628,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <h3 style="margin-top:0">四、英雄统计口径</h3>
     <p><b>出场</b>：英雄在多少场比赛里出现过，一场里同一英雄最多算一次。<b>出场率</b> = 出场场次 / 总场次。</p>
     <p><b>胜率</b> = 该英雄所在队伍获胜的场次 / 出场场次，使用原始值，不做平滑；出场很少时胜率波动大，列表默认只显示出场不少于 3 场的英雄，可在页面上调整。</p>
-    <p><b>谁最爱玩</b>：出场最多的玩家。<b>人柱力</b>：使用该英雄至少 3 场且原始胜率 &gt; 50% 的玩家中，胜率最高者；同胜率依次比较胜场和出场场次，旁边显示胜率与场次；无人满足条件时留空。</p>
+    <p><b>谁最爱玩</b>：出场最多的玩家。<b>人柱力</b>：使用该英雄至少 3 场且原始胜率 &gt; 50% 的玩家中，胜率最高者；同胜率依次比较胜场和出场场次，旁边显示胜率与场次；无人满足条件时显示“虚位以待”。</p>
     <p>点击英雄可查看使用者的出场与胜率，以及逐场记录。</p>
   </div>
 
@@ -741,7 +742,7 @@ const HERO_COLUMNS = [
     fmt: h => h.users[0] ? heroUserHtml(h.users[0], `${h.users[0].games} 场`) : "-" },
   { key: "mainstay", label: "人柱力", type: "num", left: true,
     get: h => h.mainstay ? h.mainstay.win_rate : null,
-    fmt: h => h.mainstay ? heroUserHtml(h.mainstay, `${nfmt(h.mainstay.win_rate, 1)}% · ${h.mainstay.games} 场`) : "" },
+    fmt: h => h.mainstay ? heroUserHtml(h.mainstay, `${nfmt(h.mainstay.win_rate, 1)}% · ${h.mainstay.games} 场`) : `<span class="hero-vacant">虚位以待</span>` },
 ];
 function heroUserHtml(user, note) {
   return `<span class="hero-user">${playerAvatar(user)}<span>${esc(user.name)}</span><span class="top-user-n">${esc(note)}</span></span>`;

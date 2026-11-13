@@ -115,6 +115,7 @@ class HeroStats(unittest.TestCase):
         self.assertIn('id="pane-hero"', page)
         self.assertIn("谁最爱玩", page)
         self.assertIn("人柱力", page)
+        self.assertIn("虚位以待", page)
         self.assertNotIn("__HEROES__", page)
         self.assertNotIn("</script><b>", page)  # 英雄名里的脚本结束标记不能破坏页面
         self.assertIn("value=\"3\"", page)      # 最少出场场次默认 3
