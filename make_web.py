@@ -635,7 +635,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <p><b>出场</b>：英雄在多少场比赛里出现过，一场里同一英雄最多算一次。<b>出场率</b> = 出场场次 / 总场次。</p>
     <p><b>胜率</b> = 该英雄所在队伍获胜的场次 / 出场场次，使用原始值，不做平滑；出场很少时胜率波动大，列表默认只显示出场不少于 3 场的英雄，可在页面上调整。</p>
     <p><b>谁最爱玩</b>：出场最多的玩家。<b>人柱力</b>：使用该英雄至少 3 场且原始胜率 &gt; 50% 的玩家中，胜率最高者；同胜率依次比较胜场和出场场次，旁边显示胜率与场次；无人满足条件时显示“虚位以待”。</p>
-    <p>点击英雄可查看使用者的出场与胜率，以及逐场记录。<b>克制榜 / 被克榜</b>：与同一对手英雄至少交手 3 场，胜率 ≥60% 进入克制榜，≤40% 进入被克榜；各最多 10 个，按胜率和交手场次排序，不符合条件的数量不补齐。</p>
+    <p>点击英雄可查看天辉/夜魇阵营胜率、使用者的出场与胜率，以及逐场记录。<b>克制榜 / 被克榜</b>：与同一对手英雄至少交手 3 场，胜率 ≥60% 进入克制榜，≤40% 进入被克榜；各最多 10 个，按胜率和交手场次排序，不符合条件的数量不补齐。</p>
   </div>
 
   <div class="rules-box">
@@ -789,6 +789,10 @@ function renderHeroes() {
     ? rows.map(h => "<tr>" + HERO_COLUMNS.map(c => `<td class="${c.left ? "left" : "num"}">${c.fmt(h)}</td>`).join("") + "</tr>").join("")
     : `<tr><td colspan="${HERO_COLUMNS.length}" class="empty">没有出场不少于 ${min} 场的英雄，调低上方的最少出场场次试试</td></tr>`;
 }
+function heroSideCard(label, row) {
+  return `<div class="hero-kpi"><div class="k">${label}</div><div class="v">${row.win_rate == null ? "暂无" : nfmt(row.win_rate, 1) + "%"}</div>
+    <div class="hero-shown">${row.games} 场 · ${row.wins}-${row.losses}</div></div>`;
+}
 function heroMatchupTable(title, rows, emptyText) {
   return `<div><h3 class="hero-sub">${title}</h3>
     <div class="table-wrap"><table>
@@ -813,6 +817,8 @@ function renderHeroDetail(key) {
       <div class="hero-kpi"><div class="k">出场率</div><div class="v">${nfmt(h.pick_rate, 1)}%</div></div>
       <div class="hero-kpi"><div class="k">胜-负</div><div class="v">${h.wins}-${h.losses}</div></div>
       <div class="hero-kpi"><div class="k">胜率</div><div class="v">${h.win_rate == null ? "暂无数据" : nfmt(h.win_rate, 1) + "%"}</div></div>
+      ${heroSideCard('天辉胜率', h.sides.radiant)}
+      ${heroSideCard('夜魇胜率', h.sides.dire)}
     </div>
     <div class="hero-matchups">
       ${heroMatchupTable('克制榜 <span class="hero-shown">至少交手 3 场，胜率 ≥60%</span>', h.counters, '暂无显著克制关系')}

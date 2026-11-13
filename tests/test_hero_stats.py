@@ -33,9 +33,14 @@ class HeroStats(unittest.TestCase):
         # axe 在天辉：赢、输、赢
         self.assertEqual((by_key["axe"]["wins"], by_key["axe"]["losses"]), (2, 1))
         self.assertAlmostEqual(by_key["axe"]["win_rate"], 200 / 3)
+        self.assertEqual(by_key["axe"]["sides"]["radiant"]["games"], 3)
+        self.assertAlmostEqual(by_key["axe"]["sides"]["radiant"]["win_rate"], 200 / 3)
+        self.assertEqual(by_key["axe"]["sides"]["dire"], {"games": 0, "wins": 0, "losses": 0, "win_rate": None})
         # zeus 在夜魇：输、赢、输
         self.assertEqual((by_key["zeus"]["wins"], by_key["zeus"]["losses"]), (1, 2))
         self.assertAlmostEqual(by_key["zeus"]["win_rate"], 100 / 3)
+        self.assertEqual(by_key["zeus"]["sides"]["dire"]["games"], 3)
+        self.assertAlmostEqual(by_key["zeus"]["sides"]["dire"]["win_rate"], 100 / 3)
 
     def test_single_game_is_not_smoothed(self):
         by_key = {h["key"]: h for h in hero_stats.summarize([pub_match("1", "radiant", HEROES)])["heroes"]}

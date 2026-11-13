@@ -37,7 +37,10 @@ def summarize(matches):
             seen.add(key)
             won = (player.get("team") == winner) if winner in TEAMS and player.get("team") in TEAMS else None
             g = groups.setdefault(key, {"key": key, "name": "", "image": "", "games": 0,
-                                        "wins": 0, "losses": 0, "users": {}, "records": []})
+                                        "wins": 0, "losses": 0,
+                                        "sides": {"radiant": {"games": 0, "wins": 0, "losses": 0},
+                                                  "dire": {"games": 0, "wins": 0, "losses": 0}},
+                                        "users": {}, "records": []})
             g["name"] = g["name"] or player.get("hero_zh") or key
             g["image"] = g["image"] or player.get("hero_image") or ""
             g["games"] += 1
@@ -46,12 +49,18 @@ def summarize(matches):
                                                    "avatar": player.get("avatar") or "", "games": 0, "wins": 0, "losses": 0})
             user["avatar"] = user["avatar"] or player.get("avatar") or ""
             user["games"] += 1
+            if player.get("team") in TEAMS:
+                g["sides"][player["team"]]["games"] += 1
             if won is True:
                 g["wins"] += 1
                 user["wins"] += 1
+                if player.get("team") in TEAMS:
+                    g["sides"][player["team"]]["wins"] += 1
             elif won is False:
                 g["losses"] += 1
                 user["losses"] += 1
+                if player.get("team") in TEAMS:
+                    g["sides"][player["team"]]["losses"] += 1
             g["records"].append({"match": match.get("id"), "date": match.get("date") or "",
                                  "player": player.get("name") or "", "player_id": player.get("id") or "",
                                  "avatar": player.get("avatar") or "", "team": player.get("team"), "win": won})
@@ -102,12 +111,16 @@ def summarize(matches):
         candidates = [u for u in users if u["games"] >= 3 and u["win_rate"] is not None and u["win_rate"] > 50]
         mainstay = max(candidates, key=lambda u: (u["win_rate"] if u["win_rate"] is not None else -1,
                                                  u["wins"], u["games"], u["name"])) if candidates else None
+        sides = {}
+        for side, row in g["sides"].items():
+            decided_side = row["wins"] + row["losses"]
+            sides[side] = {**row, "win_rate": row["wins"] / decided_side * 100 if decided_side else None}
         heroes.append({
             "key": g["key"], "name": g["name"], "image": g["image"], "games": g["games"],
             "wins": g["wins"], "losses": g["losses"],
             "pick_rate": g["games"] / total * 100 if total else None,
             "win_rate": g["wins"] / decided * 100 if decided else None,
-            "user_count": len(users), "users": users, "mainstay": mainstay,
+            "user_count": len(users), "users": users, "mainstay": mainstay, "sides": sides,
             "counters": relation_rows(g["key"], "counters"),
             "countered_by": relation_rows(g["key"], "countered_by"),
             "records": sorted(g["records"], key=lambda r: (r["date"], str(r["match"])), reverse=True),
