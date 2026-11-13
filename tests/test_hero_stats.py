@@ -84,6 +84,15 @@ class HeroStats(unittest.TestCase):
         self.assertEqual(four["mainstay"]["games"], 3)
         self.assertEqual(four["mainstay"]["win_rate"], 100.0)
 
+    def test_mainstay_requires_win_rate_strictly_above_fifty(self):
+        ms = [pub_match(str(i), "radiant" if i % 2 == 0 else "dire", HEROES) for i in range(4)]
+        axe = next(h for h in hero_stats.summarize(ms)["heroes"] if h["key"] == "axe")
+        self.assertEqual(axe["mainstay"], None)  # 4 场 2 胜，正好 50% 也不入选
+        ms[1]["winner"] = "radiant"
+        axe = next(h for h in hero_stats.summarize(ms)["heroes"] if h["key"] == "axe")
+        self.assertEqual(axe["mainstay"]["name"], "玩家0")
+        self.assertEqual(axe["mainstay"]["win_rate"], 75.0)
+
     def test_sorted_by_games_then_wins_then_key(self):
         ms = [pub_match("1", "radiant", HEROES), pub_match("2", "radiant", HEROES)]
         ms[1]["players"][0]["hero"] = "zzz"

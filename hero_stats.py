@@ -61,9 +61,9 @@ def summarize(matches):
         for u in users:
             d = u["wins"] + u["losses"]
             u["win_rate"] = u["wins"] / d * 100 if d else None
-        # 人柱力：至少使用该英雄 3 场才参与评选，避免 1 场 100% 压过 5 场 80%。
+        # 人柱力：至少使用该英雄 3 场且原始胜率 > 50%，避免低样本或不胜者当选。
         # 候选中原始胜率最高；同胜率比胜场，再比出场，最后按名字保证可复现。
-        candidates = [u for u in users if u["games"] >= 3]
+        candidates = [u for u in users if u["games"] >= 3 and u["win_rate"] is not None and u["win_rate"] > 50]
         mainstay = max(candidates, key=lambda u: (u["win_rate"] if u["win_rate"] is not None else -1,
                                                  u["wins"], u["games"], u["name"])) if candidates else None
         heroes.append({
