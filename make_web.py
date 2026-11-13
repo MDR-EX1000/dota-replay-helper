@@ -23,6 +23,7 @@ from web_safety import script_json
 from datetime import datetime, timedelta, timezone
 
 import balance
+import hero_stats
 import make_match_data
 import stats
 import steam_profiles
@@ -187,7 +188,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   th { color:var(--muted); font-weight:500; background:#181b22; font-size:11.5px; position:sticky; top:0;
        cursor:pointer; user-select:none; }
   th:hover { color:var(--text); }
-  th.left { text-align:left; }
+  th.left, td.left { text-align:left; }
   td.name, th:nth-child(1) { text-align:left; font-weight:600; }
   tbody tr:hover { background:#1b1f28; }
   tbody tr:last-child td { border-bottom:0; }
@@ -215,6 +216,44 @@ TEMPLATE = r"""<!DOCTYPE html>
   .audit-row .warn { color:#e0b24a; }
   .why { margin-top:10px; font-size:11.5px; color:var(--muted); line-height:1.7; }
   .empty { color:var(--muted); font-size:13px; padding:18px 0; }
+  .hero-filter { display:flex; align-items:center; gap:14px; margin:0 0 10px; color:var(--muted); font-size:13px; }
+  .hero-filter input { width:64px; margin-left:6px; background:var(--panel); color:var(--text);
+                       border:1px solid var(--line); border-radius:6px; padding:4px 8px; }
+  .hero-shown { font-size:12px; }
+  .hero-table { table-layout:fixed; }
+  #pane-hero > #heroList .hero-table th:nth-child(1) { width:23%; }
+  #pane-hero > #heroList .hero-table th:nth-child(2) { width:7%; }
+  #pane-hero > #heroList .hero-table th:nth-child(3) { width:9%; }
+  #pane-hero > #heroList .hero-table th:nth-child(4) { width:8%; }
+  #pane-hero > #heroList .hero-table th:nth-child(5) { width:9%; }
+  #pane-hero > #heroList .hero-table th:nth-child(6) { width:7%; }
+  #pane-hero > #heroList .hero-table th:nth-child(7) { width:17%; }
+  #pane-hero > #heroList .hero-table th:nth-child(8) { width:20%; }
+  .hero-table td.num { font-variant-numeric:tabular-nums; }
+  .hero-users th:nth-child(1), .hero-records th:nth-child(1) { width:46%; }
+  .hero-users th:nth-child(2) { width:18%; } .hero-users th:nth-child(3) { width:18%; }
+  .hero-users th:nth-child(4) { width:18%; }
+  .hero-records th:nth-child(2) { width:26%; } .hero-records th:nth-child(3) { width:10%; }
+  .hero-records th:nth-child(4) { width:10%; } .hero-records th:nth-child(5) { width:8%; }
+  .hero-records td.date { font-variant-numeric:tabular-nums; }
+  .top-user-n { color:var(--muted); font-size:12px; margin-left:6px; white-space:nowrap; }
+  .hero-user { display:inline-flex; align-items:center; gap:2px; min-width:0; }
+  .hero-user .player-avatar { margin-right:4px; }
+  .hero-vacant { color:var(--muted); font-size:12px; }
+  .hero-name { display:inline-flex; align-items:center; gap:8px; font-weight:600; }
+  a.hero-link { color:var(--text); text-decoration:none; }
+  a.hero-link:hover { color:var(--accent); }
+  .hero-back { display:inline-block; margin-bottom:12px; color:var(--accent); font-size:13px; text-decoration:none; }
+  .hero-kpis { display:flex; gap:12px; flex-wrap:wrap; margin:0 0 16px; }
+  .hero-kpi { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 16px; min-width:110px; }
+  .hero-kpi .k { color:var(--muted); font-size:12px; } .hero-kpi .v { font-size:20px; font-weight:600; }
+  .hero-sub { margin:18px 0 8px; font-size:15px; }
+  .hero-matchups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:18px; }
+  .hero-matchups table { table-layout:fixed; }
+  .hero-matchups th:nth-child(1) { width:40%; }
+  .hero-matchups th:nth-child(2), .hero-matchups th:nth-child(3), .hero-matchups th:nth-child(4) { width:20%; }
+  .hero-matchups .hero-sub { margin-top:0; }
+  @media (max-width:900px) { .hero-matchups { grid-template-columns:1fr; } }
   .rules-box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
                padding:18px 20px; margin-bottom:14px; }
   .rules-box table { font-size:13.5px; }
@@ -418,6 +457,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <nav class="tabs">
   <button class="tab active" data-tab="stats">数据统计</button>
   <button class="tab" data-tab="profile">玩家资料</button>
+  <button class="tab" data-tab="hero">英雄统计</button>
   <button class="tab" data-tab="match">比赛明细</button>
   <button class="tab" data-tab="roll">Roll 阵容</button>
   <button class="tab" data-tab="upload">上传录像</button>
@@ -432,6 +472,23 @@ TEMPLATE = r"""<!DOCTYPE html>
       <tbody id="statsBody"></tbody>
     </table>
   </div>
+</section>
+
+<section id="pane-hero" class="pane">
+  <div id="heroList">
+    <h2>英雄出场与胜率（共 <span id="heroTotal"></span> 场比赛，点击表头排序，点击英雄查看详情）</h2>
+    <div class="hero-filter">
+      <label>最少出场场次 <input id="heroMin" type="number" min="1" step="1" value="3"></label>
+      <span id="heroShown" class="hero-shown"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="hero-table">
+        <thead id="heroHead"></thead>
+        <tbody id="heroBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="heroDetail" hidden></div>
 </section>
 
 <section id="pane-profile" class="pane"><div id="profileRoot"></div></section>
@@ -574,7 +631,15 @@ TEMPLATE = r"""<!DOCTYPE html>
   </div>
 
   <div class="rules-box">
-    <h3 style="margin-top:0">四、数据来源</h3>
+    <h3 style="margin-top:0">四、英雄统计口径</h3>
+    <p><b>出场</b>：英雄在多少场比赛里出现过，一场里同一英雄最多算一次。<b>出场率</b> = 出场场次 / 总场次。</p>
+    <p><b>胜率</b> = 该英雄所在队伍获胜的场次 / 出场场次，使用原始值，不做平滑；出场很少时胜率波动大，列表默认只显示出场不少于 3 场的英雄，可在页面上调整。</p>
+    <p><b>谁最爱玩</b>：出场最多的玩家。<b>人柱力</b>：使用该英雄至少 3 场且原始胜率 &gt; 50% 的玩家中，胜率最高者；同胜率依次比较胜场和出场场次，旁边显示胜率与场次；无人满足条件时显示“虚位以待”。</p>
+    <p>点击英雄可查看天辉/夜魇阵营胜率、使用者的出场与胜率，以及逐场记录。<b>克制榜 / 被克榜</b>：与同一对手英雄至少交手 3 场，胜率 ≥60% 进入克制榜，≤40% 进入被克榜；各最多 10 个，按胜率和交手场次排序，不符合条件的数量不补齐。</p>
+  </div>
+
+  <div class="rules-box">
+    <h3 style="margin-top:0">五、数据来源</h3>
     <p>比赛重放（.dem）在本地用 manta 解析成 JSON，存于 <code>Desktop\replay\json</code>；
        汇总表和本页面由脚本从同一批 JSON 重新计算，不依赖第三方 API。</p>
     <p><b>伤害口径</b>：造成英雄伤害 = 对敌方英雄造成的伤害（<code>m_flHeroDamage</code>）；
@@ -586,6 +651,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <script src="player_profiles.js?v=__PROFILE_VER__"></script>
 <script>
 const PLAYERS = __DATA__;
+const HERO_STATS = __HEROES__;
 const MATCH_COUNT = __MATCHES__;
 const MATCHES = (window.MATCH_DATA && window.MATCH_DATA.matches) || [];
 const AI_ENDPOINT = __AI_ENDPOINT__;
@@ -667,6 +733,120 @@ const STAT_COLUMNS = [
     fmt: p => `<span title="${esc(p.heroes)}">${esc(p.heroes)}</span>` },
 ];
 const statsSort = { key: "winRate", dir: -1 };
+
+/* ---------- 英雄统计 ---------- */
+const HERO_COLUMNS = [
+  { key: "name", label: "英雄", type: "str", left: true,
+    fmt: h => `<a class="hero-link hero-name" href="#hero=${encodeURIComponent(h.key)}">${gameImage(h.image, "hero")}${esc(h.name)}</a>` },
+  { key: "games", label: "出场", type: "num", fmt: h => h.games },
+  { key: "pick_rate", label: "出场率", type: "num", fmt: h => nfmt(h.pick_rate, 1) + "%" },
+  { key: "wins", label: "胜-负", type: "num", fmt: h => `${h.wins}-${h.losses}` },
+  { key: "win_rate", label: "胜率", type: "num", fmt: h => h.win_rate == null ? "暂无数据" : nfmt(h.win_rate, 1) + "%" },
+  { key: "user_count", label: "使用人数", type: "num", fmt: h => h.user_count },
+  { key: "top_user", label: "谁最爱玩", type: "str", left: true,
+    get: h => h.users[0] ? h.users[0].name : "",
+    fmt: h => h.users[0] ? heroUserHtml(h.users[0], `${h.users[0].games} 场`) : "-" },
+  { key: "mainstay", label: "人柱力", type: "num", left: true,
+    get: h => h.mainstay ? h.mainstay.win_rate : null,
+    fmt: h => h.mainstay ? heroUserHtml(h.mainstay, `${nfmt(h.mainstay.win_rate, 1)}% · ${h.mainstay.games} 场`) : `<span class="hero-vacant">虚位以待</span>` },
+];
+function heroUserHtml(user, note) {
+  return `<span class="hero-user">${playerAvatar(user)}<span>${esc(user.name)}</span><span class="top-user-n">${esc(note)}</span></span>`;
+}
+const heroSort = { key: "games", dir: -1 };
+
+function heroMinGames() {
+  const n = parseInt($("heroMin").value, 10);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+function sortHeroes(key) {
+  const col = HERO_COLUMNS.find(c => c.key === key);
+  if (heroSort.key === key) heroSort.dir *= -1;
+  else { heroSort.key = key; heroSort.dir = col.type === "num" ? -1 : 1; }
+  renderHeroes();
+}
+function renderHeroes() {
+  $("heroTotal").textContent = HERO_STATS.total;
+  $("heroHead").innerHTML = "<tr>" + HERO_COLUMNS.map(c => {
+    const arrow = heroSort.key === c.key ? (heroSort.dir < 0 ? " ▼" : " ▲") : "";
+    return `<th class="${c.left ? "left" : ""}" onclick="sortHeroes('${c.key}')">${c.label}${arrow}</th>`;
+  }).join("") + "</tr>";
+  const min = heroMinGames();
+  const col = HERO_COLUMNS.find(c => c.key === heroSort.key);
+  const all = HERO_STATS.heroes;
+  const rows = all.filter(h => h.games >= min).sort((a, b) => {
+    const va = col.get ? col.get(a) : a[col.key], vb = col.get ? col.get(b) : b[col.key];
+    let r;
+    if (col.type === "num") {
+      const am = va == null, bm = vb == null;
+      if (am || bm) return am && bm ? 0 : am ? 1 : -1;   // 无数据始终排最后
+      r = (va - vb) * heroSort.dir;
+    } else r = String(va).localeCompare(String(vb), "zh") * heroSort.dir;
+    return r || b.games - a.games || a.key.localeCompare(b.key);
+  });
+  $("heroShown").textContent = `显示 ${rows.length} / ${all.length} 个英雄`;
+  $("heroBody").innerHTML = rows.length
+    ? rows.map(h => "<tr>" + HERO_COLUMNS.map(c => `<td class="${c.left ? "left" : "num"}">${c.fmt(h)}</td>`).join("") + "</tr>").join("")
+    : `<tr><td colspan="${HERO_COLUMNS.length}" class="empty">没有出场不少于 ${min} 场的英雄，调低上方的最少出场场次试试</td></tr>`;
+}
+function heroSideCard(label, row) {
+  return `<div class="hero-kpi"><div class="k">${label}</div><div class="v">${row.win_rate == null ? "暂无" : nfmt(row.win_rate, 1) + "%"}</div>
+    <div class="hero-shown">${row.games} 场 · ${row.wins}-${row.losses}</div></div>`;
+}
+function heroMatchupTable(title, rows, emptyText) {
+  return `<div><h3 class="hero-sub">${title}</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th class="left">对手英雄</th><th>交手</th><th>胜-负</th><th>胜率</th></tr></thead>
+      <tbody>${rows.length ? rows.map(r => `<tr>
+        <td class="left"><a class="hero-link hero-name" href="#hero=${encodeURIComponent(r.key)}">${gameImage(r.image, "hero")}${esc(r.name)}</a></td>
+        <td>${r.games}</td><td>${r.wins}-${r.losses}</td><td>${nfmt(r.win_rate, 1)}%</td></tr>`).join("")
+        : `<tr><td colspan="4" class="empty">${emptyText}</td></tr>`}</tbody>
+    </table></div></div>`;
+}
+function renderHeroDetail(key) {
+  const h = HERO_STATS.heroes.find(x => x.key === key);
+  const box = $("heroDetail");
+  if (!h) { showHeroList(); return; }
+  $("heroList").hidden = true;
+  box.hidden = false;
+  box.innerHTML = `
+    <a class="hero-back" href="#tab=hero">&larr; 返回英雄列表</a>
+    <h2><span class="hero-name">${gameImage(h.image, "hero")}${esc(h.name)}</span></h2>
+    <div class="hero-kpis">
+      <div class="hero-kpi"><div class="k">出场</div><div class="v">${h.games}</div></div>
+      <div class="hero-kpi"><div class="k">出场率</div><div class="v">${nfmt(h.pick_rate, 1)}%</div></div>
+      <div class="hero-kpi"><div class="k">胜-负</div><div class="v">${h.wins}-${h.losses}</div></div>
+      <div class="hero-kpi"><div class="k">胜率</div><div class="v">${h.win_rate == null ? "暂无数据" : nfmt(h.win_rate, 1) + "%"}</div></div>
+      ${heroSideCard('天辉胜率', h.sides.radiant)}
+      ${heroSideCard('夜魇胜率', h.sides.dire)}
+    </div>
+    <div class="hero-matchups">
+      ${heroMatchupTable('克制榜 <span class="hero-shown">至少交手 3 场，胜率 ≥60%</span>', h.counters, '暂无显著克制关系')}
+      ${heroMatchupTable('被克榜 <span class="hero-shown">至少交手 3 场，胜率 ≤40%</span>', h.countered_by, '暂无显著被克关系')}
+    </div>
+    <h3 class="hero-sub">谁在玩</h3>
+    <div class="table-wrap"><table class="hero-table hero-users">
+      <thead><tr><th class="left">玩家</th><th>出场</th><th>胜-负</th><th>胜率</th></tr></thead>
+      <tbody>${h.users.map(u => `<tr>
+        <td class="left">${u.id ? `<a class="player-link" href="#player=${encodeURIComponent(u.id)}&view=overview">${playerAvatar(u)}${esc(u.name)}</a>` : heroUserHtml(u, "")}</td>
+        <td>${u.games}</td><td>${u.wins}-${u.losses}</td>
+        <td>${u.win_rate == null ? "暂无数据" : nfmt(u.win_rate, 1) + "%"}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <h3 class="hero-sub">对局记录（最新在前）</h3>
+    <div class="table-wrap"><table class="hero-table hero-records">
+      <thead><tr><th class="left">日期</th><th class="left">玩家</th><th>阵营</th><th>结果</th><th>比赛</th></tr></thead>
+      <tbody>${h.records.map(r => `<tr>
+        <td class="left date">${esc(r.date)}</td><td class="left"><span class="hero-user">${playerAvatar({name:r.player,avatar:r.avatar})}<span>${esc(r.player)}</span></span></td>
+        <td>${r.team === "radiant" ? "天辉" : r.team === "dire" ? "夜魇" : "-"}</td>
+        <td>${r.win === true ? "胜" : r.win === false ? "负" : "-"}</td>
+        <td><a href="#match=${encodeURIComponent(r.match)}&sub=overview">查看</a></td></tr>`).join("")}</tbody>
+    </table></div>`;
+}
+function showHeroList() {
+  $("heroDetail").hidden = true;
+  $("heroList").hidden = false;
+}
+$("heroMin").addEventListener("input", renderHeroes);
 
 function sortStats(key) {
   const col = STAT_COLUMNS.find(c => c.key === key);
@@ -2011,6 +2191,7 @@ async function uploadAndParse(file, code) {
 
 initUploadTab();
 renderStats();
+renderHeroes();
 renderPlayers();
 
 const profileUI = window.ReplayProfiles.mount({root: $("profileRoot"), players: PLAYERS, matches: MATCHES, avatarHtml: playerAvatar});
@@ -2019,6 +2200,9 @@ function routeLocation() {
   if (q.has("player")) {
     showTab("profile");
     profileUI.show(q.get("player"), q);
+  } else if (q.has("hero")) {
+    showTab("hero");
+    renderHeroDetail(q.get("hero"));
   } else if (q.has("match")) {
     const sub = q.get("sub");
     if (sub && MATCH_SUBS.some(x => x[0] === sub)) matchState.sub = sub;
@@ -2026,7 +2210,8 @@ function routeLocation() {
     if (matchById(q.get("match"))) selectMatch(q.get("match"), false);
   } else {
     const tab = q.get("tab");
-    showTab(["stats","profile","match","roll","upload","rules"].includes(tab) ? tab : "stats");
+    showTab(["stats","hero","profile","match","roll","upload","rules"].includes(tab) ? tab : "stats");
+    if (tab === "hero") showHeroList();
     if (tab === "profile") profileUI.show(profileUI.id || (PLAYERS[0] && PLAYERS[0].id));
   }
 }
@@ -2057,9 +2242,22 @@ if (new URLSearchParams(location.search).get("demo")) {
 
 
 
-def render_page(players, match_count, ai_endpoint, upload_endpoint, upload_hint, data_ver, updated_at=None):
+def load_hero_stats(data_path):
+    """英雄统计与比赛明细同源：读取刚生成的 matches.js，避免两处口径不一致。"""
+    try:
+        with open(data_path, encoding="utf-8") as fp:
+            text = fp.read()
+        data = json.loads(text[text.index("{"):text.rindex("}") + 1])
+    except (OSError, ValueError):
+        return {"total": 0, "heroes": []}
+    return hero_stats.summarize(data.get("matches") or [])
+
+
+def render_page(players, match_count, ai_endpoint, upload_endpoint, upload_hint, data_ver, updated_at=None,
+                hero_data=None):
     values = {
         "__DATA__": script_json(players), "__MATCHES__": str(match_count),
+        "__HEROES__": script_json(hero_data if hero_data is not None else {"total": 0, "heroes": []}),
         "__TIME__": updated_at or datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M"),
         "__AI_ENDPOINT__": script_json(ai_endpoint), "__UPLOAD_ENDPOINT__": script_json(upload_endpoint),
         "__UPLOAD_HINT__": script_json(upload_hint), "__DATA_VER__": str(data_ver),
@@ -2107,7 +2305,8 @@ def main():
     data_path = os.path.join(output_dir, "data", "matches.js")
     data_ver = str(int(os.path.getmtime(data_path))) if os.path.isfile(data_path) else "0"
 
-    html = render_page(players, match_count, ai_endpoint, upload_endpoint, upload_hint, data_ver)
+    html = render_page(players, match_count, ai_endpoint, upload_endpoint, upload_hint, data_ver,
+                       hero_data=load_hero_stats(data_path))
     os.makedirs(output_dir, exist_ok=True)
     if output_dir != os.path.abspath(DOCS_DIR):
         shutil.copytree(os.path.join(DOCS_DIR, "vendor"), os.path.join(output_dir, "vendor"), dirs_exist_ok=True)

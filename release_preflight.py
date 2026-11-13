@@ -109,7 +109,7 @@ def collect(root=ROOT, data_root=None):
     add("CloudBase CLI", "ok" if find_tcb() else "wait", "仅检查工具存在；不会登录或查询云端")
     add("录像解析器", "ok" if (root / "mantatool/parse.exe").is_file() else "wait", "本地 Windows 解析器")
     add("manta 源码", "ok" if (root / "manta/go.mod").is_file() else "wait", "云端构建 Linux 解析器需要")
-    assets = ["player_data.py", "match_titles.py", "web_safety.py", "steam_profiles.py", "make_web.py", "make_match_data.py",
+    assets = ["player_data.py", "match_titles.py", "hero_stats.py", "web_safety.py", "steam_profiles.py", "make_web.py", "make_match_data.py",
               "docs/player_profiles.js", "docs/player_profiles.css", "docs/hero_portraits.json", "docs/item_icons.json"]
     missing = [name for name in assets if not (root / name).is_file()]
     add("功能源码与图片映射", "wait" if missing else "ok", "缺少：" + ", ".join(missing) if missing else "文件齐全")
