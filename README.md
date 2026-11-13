@@ -42,7 +42,7 @@ json/match_*.json          （本地，含 SteamID，git 忽略）
 
 ```
 replay/
-├── stats.py / balance.py / roll.py / make_web.py / make_match_data.py
+├── stats.py / balance.py / roll.py / make_web.py / make_match_data.py / hero_stats.py
 ├── player_data.py             # 共享身份识别与缺失感知统计
 ├── match_titles.py / web_safety.py  # 单场称号与页面序列化
 ├── steam_profiles.py          # 随录像变化刷新头像，公开缓存

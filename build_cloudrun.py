@@ -36,6 +36,7 @@ APP_FILES = [
     "rating.py",
     "player_data.py",
     "match_titles.py",
+    "hero_stats.py",
     "web_safety.py",
     "steam_profiles.py",
     "cloudbase.json",
