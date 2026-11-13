@@ -62,11 +62,16 @@ class HeroStats(unittest.TestCase):
         ms = [pub_match("1", "radiant", HEROES), pub_match("2", "radiant", HEROES), pub_match("3", "radiant", HEROES)]
         ms[2]["players"][0]["id"] = "other"
         ms[2]["players"][0]["name"] = "路人"
+        ms[0]["players"][0]["avatar"] = "https://avatars.steamstatic.com/example.jpg"
         axe = next(h for h in hero_stats.summarize(ms)["heroes"] if h["key"] == "axe")
         self.assertEqual(axe["user_count"], 2)
         self.assertEqual([u["name"] for u in axe["users"]], ["玩家0", "路人"])
         self.assertEqual(axe["users"][0]["games"], 2)
         self.assertEqual(axe["users"][0]["win_rate"], 100.0)
+        self.assertEqual(axe["users"][0]["avatar"], "https://avatars.steamstatic.com/example.jpg")
+        # 两人都是 100% 胜率时，胜场更多的人是人柱力
+        self.assertEqual(axe["mainstay"]["name"], "玩家0")
+        self.assertEqual(axe["mainstay"]["games"], 2)
 
     def test_sorted_by_games_then_wins_then_key(self):
         ms = [pub_match("1", "radiant", HEROES), pub_match("2", "radiant", HEROES)]
@@ -88,6 +93,8 @@ class HeroStats(unittest.TestCase):
         page = make_web.render_page([], 1, "", "", "", 1, hero_data=data)
         self.assertIn('data-tab="hero"', page)
         self.assertIn('id="pane-hero"', page)
+        self.assertIn("谁最爱玩", page)
+        self.assertIn("人柱力", page)
         self.assertNotIn("__HEROES__", page)
         self.assertNotIn("</script><b>", page)  # 英雄名里的脚本结束标记不能破坏页面
         self.assertIn("value=\"5\"", page)      # 最少出场场次默认 5
