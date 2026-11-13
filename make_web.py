@@ -188,7 +188,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   th { color:var(--muted); font-weight:500; background:#181b22; font-size:11.5px; position:sticky; top:0;
        cursor:pointer; user-select:none; }
   th:hover { color:var(--text); }
-  th.left { text-align:left; }
+  th.left, td.left { text-align:left; }
   td.name, th:nth-child(1) { text-align:left; font-weight:600; }
   tbody tr:hover { background:#1b1f28; }
   tbody tr:last-child td { border-bottom:0; }
@@ -220,6 +220,22 @@ TEMPLATE = r"""<!DOCTYPE html>
   .hero-filter input { width:64px; margin-left:6px; background:var(--panel); color:var(--text);
                        border:1px solid var(--line); border-radius:6px; padding:4px 8px; }
   .hero-shown { font-size:12px; }
+  .hero-table { table-layout:fixed; }
+  .hero-table th:nth-child(1) { width:26%; }
+  .hero-table th:nth-child(2) { width:9%; }
+  .hero-table th:nth-child(3) { width:11%; }
+  .hero-table th:nth-child(4) { width:11%; }
+  .hero-table th:nth-child(5) { width:11%; }
+  .hero-table th:nth-child(6) { width:11%; }
+  .hero-table th:nth-child(7) { width:21%; }
+  .hero-table td.num { font-variant-numeric:tabular-nums; }
+  .hero-users th:nth-child(1), .hero-records th:nth-child(1) { width:46%; }
+  .hero-users th:nth-child(2) { width:18%; } .hero-users th:nth-child(3) { width:18%; }
+  .hero-users th:nth-child(4) { width:18%; }
+  .hero-records th:nth-child(2) { width:26%; } .hero-records th:nth-child(3) { width:10%; }
+  .hero-records th:nth-child(4) { width:10%; } .hero-records th:nth-child(5) { width:8%; }
+  .hero-records td.date { font-variant-numeric:tabular-nums; }
+  .top-user-n { color:var(--muted); font-size:12px; margin-left:6px; }
   .hero-name { display:inline-flex; align-items:center; gap:8px; font-weight:600; }
   a.hero-link { color:var(--text); text-decoration:none; }
   a.hero-link:hover { color:var(--accent); }
@@ -430,8 +446,8 @@ TEMPLATE = r"""<!DOCTYPE html>
 
 <nav class="tabs">
   <button class="tab active" data-tab="stats">数据统计</button>
-  <button class="tab" data-tab="hero">英雄统计</button>
   <button class="tab" data-tab="profile">玩家资料</button>
+  <button class="tab" data-tab="hero">英雄统计</button>
   <button class="tab" data-tab="match">比赛明细</button>
   <button class="tab" data-tab="roll">Roll 阵容</button>
   <button class="tab" data-tab="upload">上传录像</button>
@@ -456,7 +472,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       <span id="heroShown" class="hero-shown"></span>
     </div>
     <div class="table-wrap">
-      <table>
+      <table class="hero-table">
         <thead id="heroHead"></thead>
         <tbody id="heroBody"></tbody>
       </table>
@@ -718,7 +734,7 @@ const HERO_COLUMNS = [
   { key: "user_count", label: "使用人数", type: "num", fmt: h => h.user_count },
   { key: "top_user", label: "最常使用者", type: "str", left: true,
     get: h => h.users[0] ? h.users[0].name : "",
-    fmt: h => h.users[0] ? `${esc(h.users[0].name)}<span class="hero-shown"> ${h.users[0].games} 场</span>` : "-" },
+    fmt: h => h.users[0] ? `${esc(h.users[0].name)}<span class="top-user-n">${h.users[0].games} 场</span>` : "-" },
 ];
 const heroSort = { key: "games", dir: -1 };
 
@@ -753,7 +769,7 @@ function renderHeroes() {
   });
   $("heroShown").textContent = `显示 ${rows.length} / ${all.length} 个英雄`;
   $("heroBody").innerHTML = rows.length
-    ? rows.map(h => "<tr>" + HERO_COLUMNS.map(c => `<td class="${c.left ? "left" : ""}">${c.fmt(h)}</td>`).join("") + "</tr>").join("")
+    ? rows.map(h => "<tr>" + HERO_COLUMNS.map(c => `<td class="${c.left ? "left" : "num"}">${c.fmt(h)}</td>`).join("") + "</tr>").join("")
     : `<tr><td colspan="${HERO_COLUMNS.length}" class="empty">没有出场不少于 ${min} 场的英雄，调低上方的最少出场场次试试</td></tr>`;
 }
 function renderHeroDetail(key) {
@@ -772,7 +788,7 @@ function renderHeroDetail(key) {
       <div class="hero-kpi"><div class="k">胜率</div><div class="v">${h.win_rate == null ? "暂无数据" : nfmt(h.win_rate, 1) + "%"}</div></div>
     </div>
     <h3 class="hero-sub">谁在玩</h3>
-    <div class="table-wrap"><table>
+    <div class="table-wrap"><table class="hero-table hero-users">
       <thead><tr><th class="left">玩家</th><th>出场</th><th>胜-负</th><th>胜率</th></tr></thead>
       <tbody>${h.users.map(u => `<tr>
         <td class="left">${u.id ? `<a class="player-link" href="#player=${encodeURIComponent(u.id)}&view=overview">${esc(u.name)}</a>` : esc(u.name)}</td>
@@ -780,10 +796,10 @@ function renderHeroDetail(key) {
         <td>${u.win_rate == null ? "暂无数据" : nfmt(u.win_rate, 1) + "%"}</td></tr>`).join("")}</tbody>
     </table></div>
     <h3 class="hero-sub">对局记录（最新在前）</h3>
-    <div class="table-wrap"><table>
+    <div class="table-wrap"><table class="hero-table hero-records">
       <thead><tr><th class="left">日期</th><th class="left">玩家</th><th>阵营</th><th>结果</th><th>比赛</th></tr></thead>
       <tbody>${h.records.map(r => `<tr>
-        <td class="left">${esc(r.date)}</td><td class="left">${esc(r.player)}</td>
+        <td class="left date">${esc(r.date)}</td><td class="left">${esc(r.player)}</td>
         <td>${r.team === "radiant" ? "天辉" : r.team === "dire" ? "夜魇" : "-"}</td>
         <td>${r.win === true ? "胜" : r.win === false ? "负" : "-"}</td>
         <td><a href="#match=${encodeURIComponent(r.match)}&sub=overview">查看</a></td></tr>`).join("")}</tbody>
